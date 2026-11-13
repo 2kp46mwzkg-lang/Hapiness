@@ -227,7 +227,8 @@ summary{cursor:pointer;color:var(--encre-2);font-size:16px}
 <script>
 (function(){
 'use strict';
-var VERSION = '1.1';
+var VERSION = '1.3';
+var DEPOT_DONNEES = 'hapiness';   // dépôt GitHub où est rangé journal.json
 
 /* ============================================================
    Outils
@@ -390,6 +391,34 @@ function tokenHint(v){
   if (tokenOk(t)) return '<b class="ok">Jeton reconnu</b> : ' + esc(t.slice(0, 15)) + '…' + esc(t.slice(-4)) + ' (' + t.length + ' caractères). Touche « Relier le journal ».';
   return '<b class="ko">Ce n’est pas un jeton complet</b> : il doit commencer par github_pat_ et faire environ 90 caractères. Recopie-le depuis GitHub.';
 }
+/* Quand le dépôt est introuvable : on demande à GitHub ce que le jeton voit vraiment */
+async function diagnose(cfg){
+  try{
+    var r = await GH.req('https://api.github.com/user', { headers:GH.hdr(cfg) });
+    if (r.status === 401) return 'Jeton refusé par GitHub : il est peut-être expiré, supprimé ou mal copié.';
+    if (!r.ok) return null;
+    var me = await r.json(), login = me.login || '?';
+    var full = (cfg.owner + '/' + cfg.repo).toLowerCase();
+    var r2 = await GH.req('https://api.github.com/user/repos?per_page=100&sort=updated', { headers:GH.hdr(cfg) });
+    var names = r2.ok ? (await r2.json()).map(function(x){ return x.full_name; }) : null;
+    if (login.toLowerCase() !== cfg.owner.toLowerCase())
+      return 'Ce jeton appartient au compte « ' + login + ' », pas à « ' + cfg.owner + ' ». Vérifie le champ Compte GitHub.';
+    if (names && names.some(function(n){ return n.toLowerCase() === full; })) return null;
+    var vus = names && names.length ? names.map(function(n){ return n.split('/')[1]; }).join(', ') : 'aucun';
+    return 'Le jeton fonctionne (compte ' + login + '), mais il ne voit pas le dépôt « ' + cfg.repo + ' ». Dépôts qu’il voit : ' + vus + '. ' +
+      'Sur GitHub, ouvre le jeton, touche Edit : Repository access = Only select repositories avec « ' + cfg.repo + ' », et Permissions = Contents : Read and write, puis enregistre. ' +
+      'Si ce dépôt n’existe pas encore, crée-le d’abord (privé, avec un README) sous ce nom exact.';
+  }catch(e){ return null; }
+}
+/* Dépôt qui héberge le site (https://compte.github.io/<dépôt>/) */
+function siteRepo(){
+  if (!/\.github\.io$/i.test(location.hostname)) return '';
+  var seg = location.pathname.split('/').filter(Boolean)[0] || '';
+  return /\.html?$/i.test(seg) ? '' : decodeURIComponent(seg);
+}
+/* Si les données sont dans le même dépôt que le site, on les range sur une branche à part :
+   le site n'est pas republié à chaque note et journal.json n'apparaît pas sur le site. */
+function defaultBranch(repo){ return repo && siteRepo() && repo.toLowerCase() === siteRepo().toLowerCase() ? 'donnees' : 'main'; }
 function showTokenState(v){
   var h = $('#jeton-etat'); if (h) h.innerHTML = tokenHint(v);
   var box = $('.cnx');
@@ -476,6 +505,13 @@ var GH = {
   },
   repo: function(cfg){ var self = this; return self.req(self.url(cfg), { headers:self.hdr(cfg) }).then(function(r){ if (!r.ok) return httpErr(r, cfg).then(function(e){ throw e; }); return r.json(); }); },
   branch: function(cfg){ var self = this; return self.req(self.url(cfg, '/branches/' + encodeURIComponent(cfg.branch)), { headers:self.hdr(cfg) }).then(function(r){ if (r.status === 404) return null; if (!r.ok) return httpErr(r, cfg).then(function(e){ throw e; }); return r.json(); }); },
+  createBranch: async function(cfg, base){
+    var r = await this.req(this.url(cfg, '/git/ref/heads/' + encodeURIComponent(base)), { headers:this.hdr(cfg) });
+    if (!r.ok) throw await httpErr(r, cfg);
+    var j = await r.json();
+    var r2 = await this.req(this.url(cfg, '/git/refs'), { method:'POST', headers:this.hdr(cfg, { 'Content-Type':'application/json' }), body:JSON.stringify({ ref:'refs/heads/' + cfg.branch, sha:j.object.sha }) });
+    if (!r2.ok && r2.status !== 422) throw await httpErr(r2, cfg);
+  },
   get: async function(cfg, etag){
     var u = this.fileUrl(cfg) + '?ref=' + encodeURIComponent(cfg.branch);
     var r = await this.req(u, { headers:this.hdr(cfg, etag ? { 'If-None-Match':etag } : null) });
@@ -659,9 +695,13 @@ async function doConnect(cfg, keepLocal){
   try{
     var info = await GH.repo(cfg);
     var br = await GH.branch(cfg);
-    if (!br) throw mkErr('notfound', info.size === 0
-      ? 'Le dépôt « ' + cfg.repo + ' » est vide : sur GitHub, ajoute-lui un fichier README (bouton « Add a README »), puis relie à nouveau.'
-      : 'La branche « ' + cfg.branch + ' » n’existe pas dans ce dépôt (sa branche principale est « ' + info.default_branch + ' »).');
+    if (!br){
+      var main = info.default_branch && await GH.branch(Object.assign({}, cfg, { branch:info.default_branch }));
+      if (!main) throw mkErr('notfound', 'Le dépôt « ' + cfg.repo + ' » est vide : sur GitHub, ajoute-lui un fichier README (bouton « Add a README »), puis relie à nouveau.');
+      if (!cfg.token) throw mkErr('notfound', 'La branche « ' + cfg.branch + ' » n’existe pas dans ce dépôt (sa branche principale est « ' + info.default_branch + ' »).');
+      S.cnxMsg = 'Création de la branche « ' + cfg.branch + ' »…'; render();
+      await GH.createBranch(cfg, info.default_branch);
+    }
     if (!keepLocal){ S.doc = seedDoc(); S.pending = false; }
     else if (hasUserData(S.doc)) S.pending = true;
     S.cfg = cfg; store.set(K.cfg, cfg);
@@ -671,6 +711,7 @@ async function doConnect(cfg, keepLocal){
     else toast(cfg.token ? 'Journal relié : tes notes sont partagées.' : 'Journal relié en lecture seule.');
   }catch(e){
     S.cnxMsg = e.message;
+    if (e.kind === 'notfound' && cfg.token){ var why = await diagnose(cfg); if (why) S.cnxMsg = why; }
   }
   render();
 }
@@ -1019,15 +1060,15 @@ VIEWS.reglages = function(){
 
   // Partage
   var etat;
-  if (S.cnxMsg) etat = '<p class="cnx' + (S.cnxMsg === 'Vérification du dépôt…' ? '' : ' ko') + '">' + esc(S.cnxMsg) + '</p>';
+  if (S.cnxMsg) etat = '<p class="cnx' + (/…$/.test(S.cnxMsg) ? '' : ' ko') + '">' + esc(S.cnxMsg) + '</p>';
   else if (shared()) etat = '<p class="cnx' + (S.sync.state === 'error' ? ' ko' : '') + '">' + (S.sync.state === 'error' ? esc(S.sync.msg) : 'Relié au dépôt <strong>' + esc(c.owner + '/' + c.repo) + '</strong>, fichier ' + esc(c.path) + (c.token ? '.' : ', en lecture seule.')) + '</p>';
   else etat = '<p class="cnx">Pas encore relié : les notes restent sur cet appareil.</p>';
   h += '<section class="page"><h2>Partage via GitHub</h2>' + etat +
     '<form data-form="cnx" autocomplete="off">' +
     '<div class="duo">' + champ('owner', 'Compte GitHub', 'text', dv('owner', c.owner || defOwner), '', 'autocapitalize="off" spellcheck="false" required') +
-    champ('repo', 'Dépôt des données', 'text', dv('repo', c.repo || 'journal-pauses-donnees'), '', 'autocapitalize="off" spellcheck="false" required') + '</div>' +
+    champ('repo', 'Dépôt des données', 'text', dv('repo', c.repo || DEPOT_DONNEES), '', 'autocapitalize="off" spellcheck="false" required') + '</div>' +
     '<div class="duo">' + champ('path', 'Fichier', 'text', dv('path', c.path || 'journal.json'), '', 'autocapitalize="off" spellcheck="false"') +
-    champ('branch', 'Branche', 'text', dv('branch', c.branch || 'main'), '', 'autocapitalize="off" spellcheck="false"') + '</div>' +
+    champ('branch', 'Branche', 'text', dv('branch', c.branch || defaultBranch(dv('repo', c.repo || DEPOT_DONNEES))), '', 'autocapitalize="off" spellcheck="false"') + '</div>' +
     '<div class="champ"><label class="etiq" for="jeton">Jeton d’accès GitHub</label><div class="jeton">' +
     '<input id="jeton" name="token" type="text" class="masque" value="' + esc(dr.token || '') + '" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="' + (c.token ? '•••••••• (enregistré)' : 'github_pat_…') + '" aria-describedby="jeton-etat">' +
     '<button type="button" class="mini" data-act="pasteToken">Coller</button>' +
@@ -1277,7 +1318,7 @@ var FORMS = {
     var typed = cleanToken(fd.token);
     if (typed && !tokenOk(typed)){ S.cnxMsg = 'Le jeton collé est incomplet ou contient autre chose : il doit commencer par github_pat_. Recopie-le depuis GitHub, puis touche « Coller ».'; render(); return; }
     var token = typed || (S.cfg && S.cfg.token) || '';
-    askConnect({ owner:owner, repo:repo, branch:(fd.branch || '').trim() || 'main', path:(fd.path || '').trim().replace(/^\/+/, '') || 'journal.json', token:token });
+    askConnect({ owner:owner, repo:repo, branch:(fd.branch || '').trim() || defaultBranch(repo), path:(fd.path || '').trim().replace(/^\/+/, '') || 'journal.json', token:token });
   },
   addPerson:function(fd){
     var n = (fd.name || '').trim(); if (!n) return;
