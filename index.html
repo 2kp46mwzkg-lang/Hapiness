@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1716">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pauses">
+<title>Journal des pauses</title>
+<link rel="apple-touch-icon" href="icone.png">
+<link rel="icon" type="image/png" href="icone.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Pinyon+Script&display=swap" rel="stylesheet">
+<style>
+:root{
+  --nuit:#0e1716; --lune:#e6dfcd; --brume:#94a6a1;
+  --parchemin:#ece2cc; --encre:#2b1d17; --encre-2:#5e4a3f; --encre-3:#7d6a5c;
+  --sang:#7d1424; --sang-barre:#a3283a; --lapis:#1f4e8c; --lapis-barre:#2c64ad; --bougie:#c89b3c;
+  --trait:rgba(43,29,23,.16);
+  --serif:'EB Garamond','Garamond','Georgia','Liberation Serif',serif;
+  --plume:'Pinyon Script','Snell Roundhand','Apple Chancery','URW Chancery L',cursive;
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-t:env(safe-area-inset-top,0px);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;min-height:100vh;color:var(--lune);font-family:var(--serif);font-size:18px;line-height:1.45;background:var(--nuit)}
+body::before{content:"";position:fixed;inset:0;z-index:-1;background:
+  radial-gradient(75% 36% at 88% 0%,rgba(150,178,172,.20),transparent 70%),
+  linear-gradient(180deg,#14241f 0%,#0e1716 40%,#0a1211 100%)}
+button,input,select,textarea{font-family:inherit}
+button{cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:disabled{cursor:not-allowed;opacity:.45}
+:focus-visible{outline:2px solid var(--bougie);outline-offset:2px}
+.page :focus-visible,.feuille :focus-visible{outline-color:var(--lapis)}
+[hidden]{display:none!important}
+
+.wrap{max-width:620px;margin:0 auto;padding:calc(var(--safe-t) + 18px) 14px calc(100px + var(--safe-b))}
+
+/* En-tête : ciel, titre à la plume, sceau de cire */
+.tete{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:0 4px}
+.titre{font-family:var(--plume);font-weight:400;font-size:clamp(34px,10vw,46px);line-height:1.05;margin:0;color:var(--lune)}
+.etat{margin:4px 0 0;font-size:15px;color:var(--brume);font-style:italic;min-height:1.4em}
+.sceau{flex:none;width:60px;height:60px;border:0;padding:0;background:none;border-radius:50%;margin-top:2px}
+.sceau svg{width:100%;height:100%;display:block;filter:drop-shadow(0 3px 4px rgba(0,0,0,.55))}
+.sceau .cire{fill:url(#cireG)}
+.sceau .anneau{fill:none;stroke:rgba(0,0,0,.30);stroke-width:2}
+.sceau .lunette{fill:#e9cda6;opacity:.92}
+.sceau[data-state=local] .cire{fill:#565d59}
+.sceau[data-state=pending] svg{opacity:.55}
+.sceau[data-state=saving] svg{animation:souffle 1.1s ease-in-out infinite}
+.sceau[data-state=error] .cire,.sceau[data-state=offline] .cire{fill:#5d4038}
+.sceau[data-state=error] .lunette,.sceau[data-state=offline] .lunette{opacity:.45}
+.sceau.frappe svg{animation:frappe .55s cubic-bezier(.3,1.5,.5,1)}
+@keyframes frappe{0%{transform:scale(1.4) rotate(-14deg);opacity:.35}60%{transform:scale(.93) rotate(2deg);opacity:1}100%{transform:none}}
+@keyframes souffle{50%{opacity:.55}}
+.foret{display:block;width:calc(100% + 28px);height:46px;margin:2px -14px 0}
+.foret .loin{fill:#152723}
+.foret .pres{fill:#070d0c}
+
+/* Navigation des jours */
+.jour{display:flex;align-items:center;gap:8px;margin:14px 0 4px}
+.nav{flex:none;width:44px;height:44px;border-radius:50%;border:1px solid rgba(230,223,205,.25);background:transparent;color:var(--lune);display:grid;place-items:center}
+.nav svg,.ico{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.jour-l{position:relative;flex:1;text-align:center;cursor:pointer;display:block;padding:2px 0}
+.jour-nom{display:block;font-family:var(--plume);font-size:34px;line-height:1.1}
+.jour-date{display:block;font-size:17px;color:var(--brume)}
+.jour-l input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;-webkit-appearance:none;appearance:none}
+.retour{text-align:center;margin:0 0 8px}
+.retour .lien{color:var(--bougie)}
+
+.onglets-pause{display:flex;gap:8px;overflow-x:auto;padding:8px 2px 14px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.onglets-pause::-webkit-scrollbar{display:none}
+.op{flex:none;border:1px solid rgba(230,223,205,.3);background:transparent;color:var(--lune);border-radius:999px;padding:8px 14px;font-size:16px;white-space:nowrap;min-height:40px}
+.op[aria-pressed=true]{background:var(--parchemin);color:var(--encre);border-color:var(--parchemin)}
+.op .h{font-variant-numeric:lining-nums tabular-nums;opacity:.72;margin-right:6px}
+.op-plus{border-style:dashed;color:var(--brume)}
+
+.bandeau{border:1px solid rgba(200,155,60,.45);border-radius:8px;padding:10px 12px;margin:12px 0;font-size:16px;background:rgba(200,155,60,.08);color:var(--lune)}
+.bandeau .lien{color:var(--bougie)}
+.bandeau.alerte{border-color:rgba(190,70,80,.6);background:rgba(125,20,36,.18)}
+
+/* La page de journal : parchemin réglé, marge rouge */
+.page{position:relative;background-color:var(--parchemin);color:var(--encre);border-radius:3px;padding:20px 18px 22px 42px;
+  background-image:linear-gradient(90deg,transparent 28px,rgba(125,20,36,.5) 28px,rgba(125,20,36,.5) 29px,transparent 29px);
+  box-shadow:inset 0 0 70px rgba(120,85,45,.24),inset 0 0 0 1px rgba(255,255,255,.22),0 22px 40px -14px rgba(0,0,0,.65)}
+.page + .page{margin-top:18px}
+.page h2{font-size:24px;font-weight:600;margin:0 0 6px;line-height:1.2}
+.page h3{margin:0}
+.cher{font-family:var(--plume);font-size:32px;line-height:1.05;margin:0 0 2px;color:var(--sang)}
+.page-tete{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.page-titre{font-size:23px;font-weight:600;margin:0;line-height:1.25}
+.page-sous{font-size:17px;color:var(--encre-2);margin:4px 0 0;font-style:italic}
+.page p{margin:0 0 10px}
+.page .aide{font-size:15px;color:var(--encre-2);margin:8px 0 0}
+
+.rapide{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 14px;margin:14px 0 0}
+.compte{font-size:15px;color:var(--encre-2);font-style:italic}
+.personnes{margin:8px 0 0;padding:0;list-style:none}
+.pers{padding:16px 0 14px;border-top:1px solid var(--trait)}
+.pers-tete{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px}
+.pers-nom{margin:0;font-size:22px;font-weight:600;line-height:1.2}
+.pers-trace{font-size:14px;color:var(--encre-3);font-style:italic;text-align:right}
+.pers.absent .pers-nom{color:var(--encre-3)}
+.presence{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid rgba(43,29,23,.35);border-radius:8px;overflow:hidden}
+.pr{font-size:16px;padding:8px 4px;background:transparent;border:0;color:var(--encre);min-height:44px}
+.pr + .pr{border-left:1px solid rgba(43,29,23,.25)}
+.pr-present[aria-pressed=true]{background:var(--sang);color:#f6ecd8}
+.pr-late[aria-pressed=true]{background:var(--bougie);color:var(--encre)}
+.pr-absent[aria-pressed=true]{background:var(--encre);color:var(--parchemin)}
+.comportements{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.puce{font-size:16px;display:inline-flex;align-items:center;gap:5px;padding:5px 11px 5px 9px;min-height:38px;border-radius:999px;border:1px solid rgba(43,29,23,.32);background:rgba(255,255,255,.2);color:var(--encre)}
+.puce[aria-pressed=true]{background:var(--lapis);border-color:var(--lapis);color:#f3ead6}
+.emo{font-size:17px;line-height:1}
+.note{display:block;width:100%;margin-top:10px;font-style:italic;font-size:17px;color:var(--encre);background:transparent;border:0;border-bottom:1px dashed rgba(43,29,23,.4);padding:6px 2px;resize:none;min-height:2.4em;line-height:1.4;border-radius:0}
+.note:focus{outline:none;border-bottom-color:var(--lapis);background:rgba(255,255,255,.22)}
+.note::placeholder{color:var(--encre-3)}
+.zone-note{margin-top:6px}
+
+.lien{background:none;border:0;padding:6px 0;color:var(--lapis);font-size:16px;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px;text-align:left}
+.btn{font-size:17px;padding:10px 16px;border-radius:7px;border:1px solid var(--sang);background:var(--sang);color:#f6ecd8;min-height:44px;line-height:1.2}
+.btn-sec{background:transparent;color:var(--encre);border-color:rgba(43,29,23,.4)}
+.btn-danger{background:transparent;color:var(--sang);border-color:var(--sang)}
+.pile{display:flex;flex-direction:column;gap:10px;margin-top:16px;align-items:stretch}
+.pile .btn{text-align:left}
+
+/* Journal */
+.j-pause{margin:16px 0 0}
+.j-pause:first-of-type{margin-top:8px}
+.j-titre{background:none;border:0;padding:0;font-size:20px;font-weight:600;color:var(--encre);text-align:left;text-decoration:underline;text-decoration-color:rgba(43,29,23,.25);text-underline-offset:4px}
+.j-liste{list-style:none;margin:6px 0 0;padding:0}
+.ligne{padding:8px 0;border-top:1px solid var(--trait)}
+.l-nom{font-weight:600}
+.l-pres{font-style:italic;color:var(--encre-2);white-space:nowrap}
+.l-pres::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;margin:0 6px 1px 8px;vertical-align:middle;border:1.5px solid var(--encre-2)}
+.l-present::before{background:var(--sang);border-color:var(--sang)}
+.l-late::before{background:var(--bougie);border-color:var(--bougie)}
+.l-absent::before{background:transparent}
+.l-comp,.l-note{display:block;font-size:16px}
+.l-note{font-style:italic;color:var(--encre-2)}
+.filtre{display:flex;align-items:center;gap:10px;margin:14px 2px 14px;color:var(--brume);font-size:16px}
+.filtre select,.segment{flex:1}
+.filtre select{font-size:17px;padding:9px 10px;border-radius:7px;border:1px solid rgba(230,223,205,.3);background:#132220;color:var(--lune)}
+.plus{display:flex;justify-content:center;margin-top:16px}
+.plus .btn-sec{color:var(--lune);border-color:rgba(230,223,205,.35)}
+
+/* Bilan */
+.segment{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid rgba(230,223,205,.3);border-radius:8px;overflow:hidden;margin:14px 0}
+.segment button{background:transparent;border:0;color:var(--lune);font-size:16px;padding:9px 4px;min-height:42px}
+.segment button + button{border-left:1px solid rgba(230,223,205,.18)}
+.segment button[aria-pressed=true]{background:var(--parchemin);color:var(--encre)}
+.stat{padding:16px 0 12px;border-top:1px solid var(--trait)}
+.stat:first-of-type{margin-top:12px}
+.phrase{font-size:17px;margin:4px 0 8px!important;color:var(--encre-2)}
+.rang{display:grid;grid-template-columns:minmax(7.5em,40%) 1fr 4.4em;align-items:center;gap:10px;font-size:16px;padding:4px 0}
+.rang.tete-rang{font-weight:600}
+.piste{position:relative;height:8px;background:rgba(43,29,23,.1);border-radius:0 4px 4px 0}
+.rempli{position:absolute;left:0;top:0;bottom:0;border-radius:0 4px 4px 0;background:var(--lapis-barre)}
+.rempli.sang{background:var(--sang-barre)}
+.val{text-align:right;font-variant-numeric:tabular-nums lining-nums;color:var(--encre-2);white-space:nowrap}
+.retire{font-weight:400;font-style:italic;color:var(--encre-3);font-size:16px}
+
+/* Réglages */
+.champ{display:block;margin:0 0 12px}
+.champ > span{display:block;font-size:15px;color:var(--encre-2);margin-bottom:4px}
+.champ input,.champ select,.champ textarea,.ajout input,.saisie{width:100%;font-size:17px;padding:10px 12px;border:1px solid rgba(43,29,23,.32);border-radius:7px;background:rgba(255,255,255,.45);color:var(--encre)}
+.champ small{display:block;font-size:14px;color:var(--encre-3);margin-top:4px;line-height:1.35}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+.ajout{display:flex;gap:8px;margin-top:12px}
+.ajout input{flex:1;min-width:0}
+.ajout .emoji-in{flex:0 0 3.4em;text-align:center}
+.ajout.trois{flex-wrap:wrap}
+.ajout.trois input[name=label]{flex:1 1 100%}
+.ajout .heure-in{flex:1 1 auto;width:auto}
+.liste{list-style:none;margin:10px 0 0;padding:0}
+.liste li{display:flex;align-items:center;gap:6px;padding:7px 0;border-top:1px solid var(--trait)}
+.liste .nom{flex:1;min-width:0;overflow-wrap:anywhere}
+.liste .groupe{display:block;font-size:14px;color:var(--encre-3);font-style:italic}
+.mini{font-size:15px;padding:6px 10px;border-radius:6px;border:1px solid rgba(43,29,23,.3);background:transparent;color:var(--encre);min-height:38px;min-width:38px}
+details{margin-top:12px}
+summary{cursor:pointer;color:var(--encre-2);font-size:16px}
+.cnx{font-size:16px;padding:10px 12px;border-radius:7px;background:rgba(43,29,23,.06);margin:0 0 14px!important}
+.cnx.ko{background:rgba(125,20,36,.1);color:var(--sang)}
+.case{display:flex;gap:10px;align-items:flex-start;font-size:16px;margin:10px 0}
+.case input{width:20px;height:20px;margin-top:2px;flex:none}
+.fichier{position:relative;cursor:pointer;overflow:hidden}
+.fichier input{position:absolute;left:0;top:0;width:1px;height:1px;opacity:0}
+.version{font-size:14px;color:var(--brume);text-align:center;margin-top:20px}
+
+/* Barre d'onglets */
+.barre-onglets{position:fixed;left:0;right:0;bottom:0;z-index:20;background:rgba(9,15,14,.95);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-top:1px solid rgba(230,223,205,.12);padding:4px 8px calc(4px + var(--safe-b));display:flex;justify-content:center}
+.barre-onglets .in{display:grid;grid-template-columns:repeat(4,1fr);width:100%;max-width:620px}
+.tab{background:none;border:0;color:var(--brume);display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 0 4px;font-size:14px}
+.tab svg{width:25px;height:25px}
+.tab[aria-current=page]{color:var(--lune)}
+.tab[aria-current=page] svg{stroke:var(--bougie)}
+
+/* Feuilles (fenêtres) et messages */
+.voile{position:fixed;inset:0;background:rgba(3,7,6,.62);z-index:40;display:flex;align-items:flex-end;justify-content:center}
+.feuille{background:var(--parchemin);color:var(--encre);width:100%;max-width:620px;max-height:90vh;overflow:auto;border-radius:14px 14px 0 0;padding:20px 20px calc(20px + var(--safe-b));box-shadow:0 -10px 40px rgba(0,0,0,.5);animation:monte .22s ease-out}
+.feuille h2{margin:0 0 14px;font-size:24px;font-weight:600}
+.feuille p{margin:0 0 12px}
+.feuille .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+.modeles-mini{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+@keyframes monte{from{transform:translateY(30px);opacity:0}to{transform:none;opacity:1}}
+.toast{position:fixed;left:50%;bottom:calc(86px + var(--safe-b));transform:translateX(-50%);background:#1c2a27;color:var(--lune);border:1px solid rgba(230,223,205,.2);padding:10px 16px;border-radius:8px;z-index:60;font-size:16px;max-width:min(92vw,560px);box-shadow:0 8px 20px rgba(0,0,0,.4)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media (min-width:700px){.voile{align-items:center}.feuille{border-radius:12px}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<nav class="barre-onglets" id="onglets" aria-label="Sections"></nav>
+<div id="feuille-root"></div>
+<div id="toast-root" aria-live="polite"></div>
+
+<script>
+(function(){
+'use strict';
+var VERSION = '1.0';
+
+/* ============================================================
+   Outils
+   ============================================================ */
+var $ = function(s){ return document.querySelector(s); };
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function clone(o){ return o === undefined ? undefined : JSON.parse(JSON.stringify(o)); }
+function values(o){ return Object.keys(o || {}).map(function(k){ return o[k]; }); }
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function sleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+var lastTs = 0;
+function now(){ var t = Date.now(); lastTs = t > lastTs ? t : lastTs + 1; return lastTs; }
+
+var store = {
+  get: function(k, d){ try{ var v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set: function(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
+  del: function(k){ try{ localStorage.removeItem(k); }catch(e){} }
+};
+var K = { doc:'jdp.doc', cfg:'jdp.cfg', me:'jdp.me', ui:'jdp.ui', pending:'jdp.pending' };
+
+function b64enc(str){
+  var bytes = new TextEncoder().encode(str), bin = '';
+  for (var i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+function b64dec(b64){
+  var bin = atob(String(b64).replace(/\s/g, '')), bytes = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+function toUrl64(s){ return b64enc(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+function fromUrl64(s){ s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return b64dec(s); }
+
+/* Dates */
+function pad(n){ return String(n).padStart(2, '0'); }
+function dstr(d){ return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+function todayStr(){ return dstr(new Date()); }
+function parseD(s){ var p = String(s).split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); }
+function addDays(s, n){ var d = parseD(s); d.setDate(d.getDate() + n); return dstr(d); }
+var fJour = new Intl.DateTimeFormat('fr-FR', { weekday:'long' });
+var fDate = new Intl.DateTimeFormat('fr-FR', { day:'numeric', month:'long', year:'numeric' });
+var fCourt = new Intl.DateTimeFormat('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
+var fHM = new Intl.DateTimeFormat('fr-FR', { hour:'2-digit', minute:'2-digit' });
+var fJM = new Intl.DateTimeFormat('fr-FR', { day:'numeric', month:'short' });
+function fmtDay(s){ return fJour.format(parseD(s)); }
+function fmtDate(s){ return fDate.format(parseD(s)); }
+function fmtShort(s){ return fCourt.format(parseD(s)); }
+function fmtHM(ts){ return fHM.format(new Date(ts)); }
+function fmtWhen(ts){ if (!ts) return ''; var d = new Date(ts); return dstr(d) === todayStr() ? 'à ' + fmtHM(ts) : 'le ' + fJM.format(d) + ' à ' + fmtHM(ts); }
+function nowHM(){ var d = new Date(); var m = Math.round(d.getMinutes() / 5) * 5; if (m === 60){ d.setHours(d.getHours() + 1); m = 0; } return pad(d.getHours()) + ':' + pad(m); }
+
+/* ============================================================
+   Données : un document, des collections d'enregistrements.
+   Chaque champ porte son horodatage (_t) : deux personnes qui
+   modifient en même temps sont fusionnées champ par champ,
+   la modification la plus récente l'emporte.
+   ============================================================ */
+var COLLS = ['meta', 'people', 'behaviors', 'templates', 'pauses', 'entries'];
+var DEFAULT_BEHAVIORS = [
+  ['b-joie', '😊', 'Joyeux·se', ''],
+  ['b-rit', '😂', 'Rit', ''],
+  ['b-parle', '💬', 'Parle', 'parole'],
+  ['b-muet', '🤐', 'Ne parle pas', 'parole'],
+  ['b-fatigue', '😴', 'Fatigué·e', ''],
+  ['b-contrarie', '😠', 'Contrarié·e', ''],
+  ['b-tel', '📱', 'Sur son téléphone', '']
+];
+var DEFAULT_TEMPLATES = [
+  ['t-matin', 'Pause du matin', '10:00'],
+  ['t-midi', 'Pause déjeuner', '12:00'],
+  ['t-aprem', 'Pause de l’après-midi', '15:30']
+];
+var PRES = { present:'Présent·e', late:'En retard', absent:'Absent·e' };
+
+function emptyDoc(){ var d = { format:'journal-des-pauses', version:1 }; COLLS.forEach(function(c){ d[c] = {}; }); return d; }
+function put(doc, coll, id, fields, ts){
+  var r = doc[coll][id] || (doc[coll][id] = { id:id, _t:{} });
+  if (!r._t) r._t = {};
+  Object.keys(fields).forEach(function(f){ r[f] = fields[f]; r._t[f] = ts; });
+  return r;
+}
+function seedDoc(){
+  var d = emptyDoc();
+  put(d, 'meta', 'main', { title:'Journal des pauses' }, 1);
+  DEFAULT_BEHAVIORS.forEach(function(b, i){ put(d, 'behaviors', b[0], { emoji:b[1], label:b[2], group:b[3], order:i, archived:false }, 1); });
+  DEFAULT_TEMPLATES.forEach(function(t, i){ put(d, 'templates', t[0], { label:t[1], time:t[2], order:i, archived:false }, 1); });
+  return d;
+}
+function normalizeDoc(d){
+  var out = emptyDoc();
+  if (!d || typeof d !== 'object') return out;
+  COLLS.forEach(function(c){
+    var src = d[c];
+    if (!src || typeof src !== 'object') return;
+    Object.keys(src).forEach(function(k){
+      var r = src[k];
+      if (r && typeof r === 'object' && !Array.isArray(r)) out[c][k] = Object.assign({}, r, { id:k, _t:Object.assign({}, r._t || {}) });
+    });
+  });
+  return out;
+}
+function cmpVal(a, b){ var x = JSON.stringify(a === undefined ? null : a), y = JSON.stringify(b === undefined ? null : b); return x < y ? -1 : x > y ? 1 : 0; }
+function mergeRecord(a, b, id){
+  if (!a) return clone(b);
+  if (!b) return clone(a);
+  var ta = a._t || {}, tb = b._t || {}, out = { id:a.id || b.id || id, _t:{} };
+  var fields = {};
+  Object.keys(ta).forEach(function(f){ fields[f] = 1; });
+  Object.keys(tb).forEach(function(f){ fields[f] = 1; });
+  Object.keys(fields).forEach(function(f){
+    var x = ta[f] || 0, y = tb[f] || 0;
+    var takeB = y > x || (y === x && cmpVal(b[f], a[f]) > 0);
+    var src = takeB ? b : a;
+    if (src[f] !== undefined) out[f] = clone(src[f]);
+    out._t[f] = takeB ? y : x;
+  });
+  return out;
+}
+function mergeDocs(a, b){
+  var out = emptyDoc();
+  COLLS.forEach(function(c){
+    var A = (a && a[c]) || {}, B = (b && b[c]) || {}, keys = {};
+    Object.keys(A).forEach(function(k){ keys[k] = 1; });
+    Object.keys(B).forEach(function(k){ keys[k] = 1; });
+    Object.keys(keys).forEach(function(k){ out[c][k] = mergeRecord(A[k], B[k], k); });
+  });
+  return out;
+}
+/* a contient-il au moins un champ plus récent (ou gagnant) que b ? */
+function hasNewer(a, b){
+  for (var i = 0; i < COLLS.length; i++){
+    var c = COLLS[i], A = a[c] || {}, B = (b && b[c]) || {};
+    for (var k in A){
+      var ta = A[k]._t || {}, rb = B[k], tb = (rb && rb._t) || {};
+      for (var f in ta){
+        var x = ta[f] || 0, y = tb[f] || 0;
+        if (x > y) return true;
+        if (x === y && x > 0 && cmpVal(A[k][f], rb ? rb[f] : undefined) > 0) return true;
+      }
+    }
+  }
+  return false;
+}
+/* Fichier compact : l'identifiant de chaque enregistrement est déjà sa clé */
+function serialize(doc){
+  return JSON.stringify(doc, function(k, v){ return (k === 'id' && this && this._t) ? undefined : v; }) + '\n';
+}
+function hasUserData(doc){
+  return values(doc.pauses).some(function(p){ return !p.deleted; }) || values(doc.people).some(function(p){ return !p.archived; });
+}
+
+/* ============================================================
+   État
+   ============================================================ */
+var S = {
+  doc: mergeDocs(seedDoc(), normalizeDoc(store.get(K.doc, null))),
+  cfg: store.get(K.cfg, null),
+  me: store.get(K.me, ''),
+  ui: Object.assign({ view:'pause', range:'30', jperson:'', jlimit:20 }, store.get(K.ui, {})),
+  pending: !!store.get(K.pending, false),
+  date: todayStr(),
+  pauseId: null,
+  openNotes: {},
+  focusSel: null,
+  sync: { state:'local', msg:'' },
+  etag: null,
+  lastSync: null,
+  backoffUntil: 0,
+  lastTouch: null,
+  cnxMsg: null
+};
+S.ui.jlimit = 20;
+if (S.cfg) S.sync.state = S.pending ? 'pending' : 'ok';
+
+function persistDoc(){ store.set(K.doc, S.doc); store.set(K.pending, S.pending); }
+function saveUi(){ store.set(K.ui, { view:S.ui.view, range:S.ui.range, jperson:S.ui.jperson }); }
+function shared(){ return !!(S.cfg && S.cfg.owner && S.cfg.repo); }
+function canEdit(){ return !shared() || !!S.cfg.token; }
+function setMe(v){ S.me = String(v || '').trim().slice(0, 40); store.set(K.me, S.me); }
+
+/* Lecture */
+function byName(a, b){ return (a.name || '').localeCompare(b.name || '', 'fr', { sensitivity:'base' }); }
+function byOrder(a, b){ return ((a.order || 0) - (b.order || 0)) || (a.label || '').localeCompare(b.label || '', 'fr'); }
+function byTime(a, b){ return (a.time || '').localeCompare(b.time || '') || (a.label || '').localeCompare(b.label || '', 'fr'); }
+function activePeople(){ return values(S.doc.people).filter(function(p){ return !p.archived && p.name; }).sort(byName); }
+function archivedPeople(){ return values(S.doc.people).filter(function(p){ return p.archived && p.name; }).sort(byName); }
+function allPeople(){ return values(S.doc.people).filter(function(p){ return p.name; }).sort(byName); }
+function activeBehaviors(){ return values(S.doc.behaviors).filter(function(b){ return !b.archived && b.label; }).sort(byOrder); }
+function allBehaviors(){ return values(S.doc.behaviors).filter(function(b){ return b.label; }).sort(byOrder); }
+function activeTemplates(){ return values(S.doc.templates).filter(function(t){ return !t.archived && t.label; }).sort(byTime); }
+function livePauses(){ return values(S.doc.pauses).filter(function(p){ return !p.deleted && p.date; }); }
+function pausesOn(date){ return livePauses().filter(function(p){ return p.date === date; }).sort(byTime); }
+function entryKey(pid, perId){ return pid + '|' + perId; }
+function getEntry(pid, perId){ return S.doc.entries[entryKey(pid, perId)] || null; }
+function behaviorsOf(e){ if (!e) return []; return allBehaviors().filter(function(b){ return e['b:' + b.id] === true; }); }
+function entryHasData(e){ return !!(e && (e.presence || e.note || behaviorsOf(e).length)); }
+function title(){ var m = S.doc.meta.main; return (m && m.title) || 'Journal des pauses'; }
+
+/* Écriture */
+function setFields(coll, id, fields, opt){
+  opt = opt || {};
+  if (!canEdit()){ toast('Lecture seule : ajoute un jeton dans les réglages pour pouvoir écrire.'); return false; }
+  var ts = now();
+  put(S.doc, coll, id, Object.assign({}, fields, { by:S.me || '', at:ts }), ts);
+  if (coll === 'pauses') S.lastTouch = S.doc.pauses[id].date;
+  if (coll === 'entries'){ var p = S.doc.pauses[S.doc.entries[id].pauseId]; if (p) S.lastTouch = p.date; }
+  touched();
+  if (!opt.silent) render();
+  return true;
+}
+function setEntry(pid, perId, fields, opt){ return setFields('entries', entryKey(pid, perId), Object.assign({ pauseId:pid, personId:perId }, fields), opt); }
+
+/* ============================================================
+   GitHub : lecture / écriture d'un fichier JSON via l'API Contents
+   ============================================================ */
+function mkErr(kind, msg, extra){ var e = new Error(msg); e.kind = kind; return Object.assign(e, extra || {}); }
+var GH = {
+  url: function(cfg, suffix){ return 'https://api.github.com/repos/' + encodeURIComponent(cfg.owner) + '/' + encodeURIComponent(cfg.repo) + (suffix || ''); },
+  fileUrl: function(cfg){ return this.url(cfg, '/contents/' + cfg.path.split('/').map(encodeURIComponent).join('/')); },
+  hdr: function(cfg, extra){ var h = { 'Accept':'application/vnd.github+json' }; if (cfg.token) h.Authorization = 'Bearer ' + cfg.token; return Object.assign(h, extra || {}); },
+  req: function(url, opt){
+    return fetch(url, Object.assign({ cache:'no-store' }, opt)).catch(function(){
+      throw mkErr('network', 'Pas de réseau : tes modifications restent sur cet appareil et partiront au retour de la connexion.');
+    });
+  },
+  repo: function(cfg){ var self = this; return self.req(self.url(cfg), { headers:self.hdr(cfg) }).then(function(r){ if (!r.ok) return httpErr(r, cfg).then(function(e){ throw e; }); return r.json(); }); },
+  branch: function(cfg){ var self = this; return self.req(self.url(cfg, '/branches/' + encodeURIComponent(cfg.branch)), { headers:self.hdr(cfg) }).then(function(r){ if (r.status === 404) return null; if (!r.ok) return httpErr(r, cfg).then(function(e){ throw e; }); return r.json(); }); },
+  get: async function(cfg, etag){
+    var u = this.fileUrl(cfg) + '?ref=' + encodeURIComponent(cfg.branch);
+    var r = await this.req(u, { headers:this.hdr(cfg, etag ? { 'If-None-Match':etag } : null) });
+    if (r.status === 304) return { notModified:true };
+    if (r.status === 404) return { missing:true };
+    if (!r.ok) throw await httpErr(r, cfg);
+    var j = await r.json(), text;
+    if (Array.isArray(j) || j.type !== 'file') throw mkErr('format', '« ' + cfg.path + ' » est un dossier, pas un fichier. Indique un nom de fichier, par exemple journal.json.');
+    if (j.encoding === 'base64' && j.content) text = b64dec(j.content);
+    else if (!j.size) text = '';
+    else {
+      var r2 = await this.req(u, { headers:this.hdr(cfg, { 'Accept':'application/vnd.github.raw' }) });
+      if (!r2.ok) throw await httpErr(r2, cfg);
+      text = await r2.text();
+    }
+    return { sha:j.sha, etag:r.headers.get('ETag'), doc:parseRemote(text, cfg.path) };
+  },
+  put: async function(cfg, doc, sha, message){
+    var body = { message:message, content:b64enc(serialize(doc)), branch:cfg.branch };
+    if (sha) body.sha = sha;
+    var r = await this.req(this.fileUrl(cfg), { method:'PUT', headers:this.hdr(cfg, { 'Content-Type':'application/json' }), body:JSON.stringify(body) });
+    if (r.status === 409 || r.status === 422){
+      var j = {}; try{ j = await r.json(); }catch(e){}
+      if (r.status === 422 && !/sha/i.test(j.message || '')) throw mkErr('other', 'GitHub a refusé l’enregistrement : ' + (j.message || 'erreur 422') + '.');
+      return { conflict:true };
+    }
+    if (!r.ok) throw await httpErr(r, cfg);
+    var res = await r.json();
+    return { sha:res.content && res.content.sha };
+  }
+};
+async function httpErr(r, cfg){
+  var j = {}; try{ j = await r.json(); }catch(e){}
+  if (r.status === 401) return mkErr('auth', 'Jeton refusé par GitHub : il est peut-être expiré ou mal copié. Colle un nouveau jeton dans les réglages.');
+  if (r.status === 403 || r.status === 429){
+    if (r.headers.get('x-ratelimit-remaining') === '0'){
+      var reset = (+r.headers.get('x-ratelimit-reset') || 0) * 1000 || Date.now() + 60000;
+      return mkErr('rate', 'Trop d’appels à GitHub : nouvel essai vers ' + fmtHM(reset) + '.', { reset:reset });
+    }
+    return mkErr('perm', cfg.token ? 'Ce jeton n’a pas le droit d’écrire dans « ' + cfg.repo + ' » : il lui faut la permission Contents en lecture et écriture sur ce dépôt.' : 'Accès refusé par GitHub.');
+  }
+  if (r.status === 404) return mkErr('notfound', cfg.token ? 'Dépôt « ' + cfg.owner + '/' + cfg.repo + ' » introuvable, ou le jeton n’y a pas accès.' : 'Dépôt « ' + cfg.owner + '/' + cfg.repo + ' » introuvable. S’il est privé, il faut un jeton.');
+  return mkErr('other', 'GitHub a répondu ' + r.status + (j.message ? ' : ' + j.message : '') + '.');
+}
+function parseRemote(text, path){
+  if (!String(text).trim()) return emptyDoc();
+  var o;
+  try{ o = JSON.parse(text); }catch(e){ throw mkErr('format', 'Le fichier « ' + path + ' » n’est pas un JSON lisible. Rien n’a été écrasé.'); }
+  if (!o || typeof o !== 'object' || (Object.keys(o).length && o.format !== 'journal-des-pauses'))
+    throw mkErr('format', 'Le fichier « ' + path + ' » ne contient pas un journal des pauses. Rien n’a été écrasé : choisis un autre nom de fichier.');
+  return normalizeDoc(o);
+}
+
+/* ============================================================
+   Synchronisation
+   ============================================================ */
+var syncing = false, polling = false, again = false, saveTimer = null, lastPoll = 0;
+
+function touched(){
+  S.pending = true;
+  persistDoc();
+  if (shared() && canEdit()){
+    setSync('pending');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(syncNow, 4000);
+  }
+}
+function commitMsg(){
+  return 'Journal des pauses : ' + (S.lastTouch ? 'pause du ' + fmtShort(S.lastTouch) : 'réglages') + (S.me ? ' (' + S.me + ')' : '');
+}
+function handleErr(e){
+  var k = e.kind || 'other';
+  if (k === 'network') setSync('offline', e.message);
+  else {
+    setSync('error', e.message);
+    if (k === 'rate') S.backoffUntil = e.reset || Date.now() + 60000;
+    if (k === 'auth' || k === 'perm' || k === 'notfound' || k === 'format') S.backoffUntil = Date.now() + 5 * 60000;
+  }
+  if (!e.kind) console.error(e);
+}
+async function syncNow(){
+  if (!shared()){ setSync('local'); return; }
+  if (syncing){ again = true; return; }
+  if (S.backoffUntil && Date.now() < S.backoffUntil) return;
+  syncing = true; clearTimeout(saveTimer);
+  var cfg = S.cfg, hadPending = S.pending;
+  if (canEdit() && S.pending) setSync('saving');
+  try{
+    var done = false;
+    for (var i = 0; i < 5 && !done; i++){
+      var remote = await GH.get(cfg, null);
+      if (cfg !== S.cfg) return;
+      var rdoc = remote.missing ? null : remote.doc;
+      var merged = mergeDocs(rdoc || emptyDoc(), S.doc);
+      var mustPush = canEdit() && (!rdoc || hasNewer(merged, rdoc));
+      if (!mustPush){
+        S.doc = merged; S.etag = remote.etag || null; S.pending = false; done = true; break;
+      }
+      setSync('saving');
+      var res = await GH.put(cfg, merged, remote.missing ? null : remote.sha, commitMsg());
+      if (cfg !== S.cfg) return;
+      if (res.conflict){ await sleep(300 + Math.random() * 700); continue; }
+      S.doc = mergeDocs(merged, S.doc);
+      S.etag = null;
+      S.pending = hasNewer(S.doc, merged);
+      if (S.pending) again = true;
+      done = true;
+    }
+    if (!done) throw mkErr('other', 'Beaucoup de modifications en même temps : nouvel essai dans un instant.');
+    S.lastSync = Date.now(); S.backoffUntil = 0;
+    setSync(S.pending ? 'pending' : 'ok', null, hadPending && !S.pending);
+  }catch(e){
+    handleErr(e);
+    if (e.kind === 'other') again = false;
+  }finally{
+    syncing = false;
+    persistDoc();
+    requestRender();
+    if (again){ again = false; clearTimeout(saveTimer); saveTimer = setTimeout(syncNow, 900); }
+  }
+}
+async function poll(force){
+  if (!shared() || syncing || polling) return;
+  if (document.hidden && !force) return;
+  if (S.backoffUntil && Date.now() < S.backoffUntil) return;
+  if (S.pending && canEdit()) return syncNow();
+  polling = true; lastPoll = Date.now();
+  try{
+    var cfg = S.cfg;
+    var r = await GH.get(cfg, S.etag);
+    if (cfg !== S.cfg) return;
+    if (r.notModified){ S.lastSync = Date.now(); setSync('ok'); return; }
+    if (r.missing){ if (canEdit()){ S.pending = true; polling = false; return syncNow(); } setSync('ok'); return; }
+    var changed = hasNewer(r.doc, S.doc);
+    S.doc = mergeDocs(r.doc, S.doc);
+    S.etag = r.etag;
+    if (canEdit() && hasNewer(S.doc, r.doc)){ S.pending = true; clearTimeout(saveTimer); saveTimer = setTimeout(syncNow, 500); }
+    persistDoc();
+    S.lastSync = Date.now();
+    setSync(S.pending ? 'pending' : 'ok');
+    if (changed) requestRender();
+  }catch(e){ handleErr(e); }
+  finally{ polling = false; }
+}
+setInterval(function(){
+  var iv = (S.cfg && S.cfg.token) ? 20000 : 90000;
+  if (Date.now() - lastPoll >= iv) poll();
+}, 5000);
+document.addEventListener('visibilitychange', function(){
+  if (!document.hidden) poll(true);
+  else if (S.pending && shared() && canEdit()){ flushNotes(); syncNow(); }
+});
+window.addEventListener('online', function(){ if (shared()) syncNow(); });
+
+function setSync(state, msg, stamp){ S.sync = { state:state, msg:msg || '' }; updateSeal(stamp); }
+function syncText(){
+  if (!shared()) return 'Sur cet appareil seulement';
+  var st = S.sync.state;
+  if (st === 'saving') return 'Envoi au dépôt…';
+  if (st === 'pending') return 'Modifications en attente d’envoi';
+  if (st === 'offline' || st === 'error') return S.sync.msg;
+  var t = canEdit() ? 'À jour' : 'Lecture seule, à jour';
+  return S.lastSync ? t + ' à ' + fmtHM(S.lastSync) : t;
+}
+function updateSeal(stamp){
+  var el = $('#sceau'), t = $('#etat'), txt = syncText();
+  if (el){
+    el.dataset.state = shared() ? S.sync.state : 'local';
+    el.setAttribute('aria-label', 'Synchroniser. État : ' + txt);
+    if (stamp){ el.classList.remove('frappe'); void el.offsetWidth; el.classList.add('frappe'); }
+  }
+  if (t) t.textContent = txt;
+}
+
+/* ============================================================
+   Connexion, invitation
+   ============================================================ */
+function sameTarget(a, b){ return !!(a && b && a.owner === b.owner && a.repo === b.repo && a.path === b.path && a.branch === b.branch); }
+async function doConnect(cfg, keepLocal){
+  S.cnxMsg = 'Vérification du dépôt…'; render();
+  try{
+    var info = await GH.repo(cfg);
+    var br = await GH.branch(cfg);
+    if (!br) throw mkErr('notfound', info.size === 0
+      ? 'Le dépôt « ' + cfg.repo + ' » est vide : sur GitHub, ajoute-lui un fichier README (bouton « Add a README »), puis relie à nouveau.'
+      : 'La branche « ' + cfg.branch + ' » n’existe pas dans ce dépôt (sa branche principale est « ' + info.default_branch + ' »).');
+    if (!keepLocal){ S.doc = seedDoc(); S.pending = false; }
+    else if (hasUserData(S.doc)) S.pending = true;
+    S.cfg = cfg; store.set(K.cfg, cfg);
+    S.etag = null; S.backoffUntil = 0; S.cnxMsg = null;
+    await syncNow();
+    if (S.sync.state === 'error' || S.sync.state === 'offline') S.cnxMsg = S.sync.msg;
+    else toast(cfg.token ? 'Journal relié : tes notes sont partagées.' : 'Journal relié en lecture seule.');
+  }catch(e){
+    S.cnxMsg = e.message;
+  }
+  render();
+}
+function askConnect(cfg){
+  if (hasUserData(S.doc) && !sameTarget(S.cfg, cfg)){
+    openSheet({
+      title:'Des notes sont déjà sur cet appareil',
+      html:'<p>Ce téléphone contient déjà des personnes ou des pauses. Que veux-tu en faire en reliant le journal partagé ?</p>',
+      actions:[
+        { label:'Les ajouter au journal partagé', run:function(){ doConnect(cfg, true); } },
+        { label:'Les effacer, prendre le journal partagé', cls:'btn-sec', run:function(){ doConnect(cfg, false); } }
+      ]
+    });
+  } else doConnect(cfg, true);
+}
+function inviteUrl(){
+  var c = S.cfg;
+  return location.href.split('#')[0] + '#rejoindre=' + toUrl64(JSON.stringify({ v:1, o:c.owner, r:c.repo, b:c.branch, p:c.path, t:c.token }));
+}
+async function copyText(t, okMsg){
+  try{ await navigator.clipboard.writeText(t); toast(okMsg || 'Copié.'); }
+  catch(e){
+    openSheet({ title:'Lien d’invitation', html:'<p>Copie ce lien et envoie-le :</p><textarea class="saisie" rows="5" readonly>' + esc(t) + '</textarea>', actions:[{ label:'Fermer', run:function(){} }], noCancel:true, noFocus:true });
+  }
+}
+function checkInvite(){
+  var m = location.hash.match(/^#rejoindre=([A-Za-z0-9_-]+)/);
+  if (!m) return;
+  try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){}
+  var inv;
+  try{ inv = JSON.parse(fromUrl64(m[1])); }catch(e){ toast('Ce lien d’invitation est illisible : demande un nouveau lien.'); return; }
+  var cfg = { owner:inv.o, repo:inv.r, branch:inv.b || 'main', path:inv.p || 'journal.json', token:inv.t || '' };
+  var local = hasUserData(S.doc) && !sameTarget(S.cfg, cfg);
+  openSheet({
+    title:'Rejoindre le journal',
+    html:'<p>Tu es invité·e à tenir le journal des pauses partagé <strong>' + esc(cfg.owner + '/' + cfg.repo) + '</strong>.</p>' +
+      champ('me', 'Ton prénom', 'text', S.me, 'Il signe les notes que tu écris.', 'autocomplete="given-name" maxlength="40"') +
+      (local ? '<label class="case"><input type="checkbox" name="keep"> Garder aussi les notes déjà présentes sur ce téléphone</label>' : ''),
+    actions:[{ label:'Rejoindre', run:function(fd){ setMe(fd.me); doConnect(cfg, local ? !!fd.keep : true); } }]
+  });
+}
+
+/* ============================================================
+   Feuilles, messages, téléchargements
+   ============================================================ */
+function champ(name, label, type, value, help, attrs){
+  return '<label class="champ"><span>' + esc(label) + '</span><input name="' + name + '" type="' + (type || 'text') + '" value="' + esc(value == null ? '' : value) + '" ' + (attrs || '') + '>' + (help ? '<small>' + help + '</small>' : '') + '</label>';
+}
+function closeSheet(){ $('#feuille-root').innerHTML = ''; document.removeEventListener('keydown', escClose); }
+function escClose(e){ if (e.key === 'Escape') closeSheet(); }
+function openSheet(o){
+  closeSheet();
+  var root = $('#feuille-root');
+  root.innerHTML = '<div class="voile"><form class="feuille" role="dialog" aria-modal="true" aria-labelledby="f-t" novalidate>' +
+    '<h2 id="f-t">' + esc(o.title) + '</h2>' + (o.html || '') +
+    '<div class="actions">' + o.actions.map(function(a, i){ return '<button type="' + (i === 0 ? 'submit' : 'button') + '" class="btn ' + (a.cls || '') + '" data-i="' + i + '">' + esc(a.label) + '</button>'; }).join('') +
+    (o.noCancel ? '' : '<button type="button" class="btn btn-sec" data-i="annuler">Annuler</button>') + '</div></form></div>';
+  var form = root.querySelector('form');
+  function run(i){
+    var fd = {};
+    new FormData(form).forEach(function(v, k){ fd[k] = v; });
+    var r = o.actions[i].run(fd, form, root.querySelector('[data-i="' + i + '"]'));
+    if (r !== false) closeSheet();
+  }
+  form.addEventListener('submit', function(e){ e.preventDefault(); run(0); });
+  form.addEventListener('click', function(e){
+    var fb = e.target.closest('[data-fill]');
+    if (fb){ var v = JSON.parse(fb.dataset.fill); Object.keys(v).forEach(function(k){ if (form.elements[k]) form.elements[k].value = v[k]; }); return; }
+    var b = e.target.closest('button[data-i]');
+    if (!b || b.type === 'submit') return;
+    if (b.dataset.i === 'annuler') return closeSheet();
+    run(+b.dataset.i);
+  });
+  root.querySelector('.voile').addEventListener('click', function(e){ if (e.target.classList.contains('voile')) closeSheet(); });
+  document.addEventListener('keydown', escClose);
+  if (!o.noFocus) setTimeout(function(){ var f = form.querySelector('input:not([type=checkbox]),textarea,select'); if (f) f.focus(); }, 60);
+}
+var toastTimer = null;
+function toast(msg){
+  var r = $('#toast-root');
+  r.innerHTML = '<div class="toast">' + esc(msg) + '</div>';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ r.innerHTML = ''; }, 3200);
+}
+function download(name, text, type){
+  var url = URL.createObjectURL(new Blob([text], { type:type }));
+  var a = document.createElement('a'); a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
+}
+
+/* ============================================================
+   Dessins : sceau de cire, forêt, icônes
+   ============================================================ */
+var SEAL = (function(){
+  var n = 18, d = '';
+  for (var i = 0; i < n; i++){
+    var a0 = i / n * 2 * Math.PI, a1 = (i + .5) / n * 2 * Math.PI, a2 = (i + 1) / n * 2 * Math.PI;
+    var p = function(a, r){ return (32 + r * Math.cos(a)).toFixed(2) + ' ' + (32 + r * Math.sin(a)).toFixed(2); };
+    if (i === 0) d += 'M' + p(a0, 28.5);
+    d += ' Q' + p(a1, 31.5) + ' ' + p(a2, 28.5);
+  }
+  return '<svg viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="cireG" cx="38%" cy="32%" r="72%"><stop offset="0" stop-color="#a8303f"/><stop offset=".55" stop-color="#7d1424"/><stop offset="1" stop-color="#4a0a14"/></radialGradient></defs>' +
+    '<path class="cire" d="' + d + 'Z"/><circle class="anneau" cx="32" cy="32" r="21"/>' +
+    '<path class="lunette" d="M37 21 A12 12 0 1 0 37 43 A11.5 11.5 0 0 1 37 21 Z"/></svg>';
+})();
+var FOREST = (function(){
+  function layer(seed, minH, varH, cls){
+    var W = 620, H = 46, s = seed, x = -8, d = 'M-10 ' + H;
+    function rnd(){ s = (s * 16807) % 2147483647; return s / 2147483647; }
+    while (x < W + 10){
+      var tw = 15 + rnd() * 20, th = minH + rnd() * varH, b = H, cx = x + tw / 2;
+      [[x, b], [cx - tw * .34, b - th * .3], [cx - tw * .17, b - th * .3], [cx - tw * .27, b - th * .57], [cx - tw * .11, b - th * .57], [cx - tw * .15, b - th * .8], [cx, b - th],
+       [cx + tw * .15, b - th * .8], [cx + tw * .11, b - th * .57], [cx + tw * .27, b - th * .57], [cx + tw * .17, b - th * .3], [cx + tw * .34, b - th * .3], [x + tw, b]]
+        .forEach(function(p){ d += ' L' + p[0].toFixed(1) + ' ' + p[1].toFixed(1); });
+      x += tw * (.5 + rnd() * .4);
+    }
+    return '<path class="' + cls + '" d="' + d + ' L' + (W + 10) + ' ' + H + ' Z"/>';
+  }
+  return '<svg class="foret" viewBox="0 0 620 46" preserveAspectRatio="xMidYMax slice" aria-hidden="true">' + layer(7, 22, 22, 'loin') + layer(29, 12, 20, 'pres') + '</svg>';
+})();
+var ICO = {
+  pause:'<path d="M12 3c1.7 2 1.7 3.5 0 4.8C10.3 6.5 10.3 5 12 3z"/><path d="M9 10h6v10H9z"/><path d="M6 20.5h12"/>',
+  journal:'<path d="M3.5 5.5c2.7-1 5.8-.8 8.5.8v13c-2.7-1.6-5.8-1.8-8.5-.8z"/><path d="M20.5 5.5c-2.7-1-5.8-.8-8.5.8v13c2.7-1.6 5.8-1.8 8.5-.8z"/>',
+  bilan:'<path d="M4 6.5h9M4 12h16M4 17.5h6"/>',
+  reglages:'<circle cx="8" cy="8" r="4.2"/><path d="M11 11l9.5 9.5M16.5 16.5l2.2-2.2M19 19l2-2"/>',
+  gauche:'<path d="M15 5l-7 7 7 7"/>',
+  droite:'<path d="M9 5l7 7-7 7"/>',
+  haut:'<path d="M6 15l6-6 6 6"/>',
+  bas:'<path d="M6 9l6 6 6-6"/>'
+};
+function ico(n){ return '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">' + ICO[n] + '</svg>'; }
+
+/* ============================================================
+   Rendu
+   ============================================================ */
+var renderPending = false;
+function isEditing(){
+  var a = document.activeElement;
+  return !!(a && a.matches && a.matches('#app textarea, #app select, #app input:not([type=checkbox]):not([type=file]):not([type=date])'));
+}
+function requestRender(){ if (isEditing()){ renderPending = true; return; } render(); }
+function render(top){
+  renderPending = false;
+  var y = window.scrollY;
+  var v = VIEWS[S.ui.view] ? S.ui.view : 'pause';
+  $('#app').innerHTML = headerHTML() + VIEWS[v]();
+  $('#onglets').innerHTML = tabsHTML(v);
+  document.querySelectorAll('#app textarea.note').forEach(autosize);
+  updateSeal();
+  if (top) window.scrollTo(0, 0); else if (Math.abs(window.scrollY - y) > 2) window.scrollTo(0, y);
+  if (S.focusSel){
+    var f = $(S.focusSel); S.focusSel = null;
+    if (f){ f.focus({ preventScroll:false }); if (f.setSelectionRange && f.value) f.setSelectionRange(f.value.length, f.value.length); }
+  }
+}
+function autosize(el){ el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
+function headerHTML(){
+  return '<header class="tete"><div><h1 class="titre">' + esc(title()) + '</h1><p class="etat" id="etat"></p></div>' +
+    '<button class="sceau" id="sceau" type="button" data-act="sync">' + SEAL + '</button></header>' + FOREST;
+}
+function tabsHTML(v){
+  var tabs = [['pause', 'Pause'], ['journal', 'Journal'], ['bilan', 'Bilan'], ['reglages', 'Réglages']];
+  return '<div class="in">' + tabs.map(function(t){
+    return '<button class="tab" type="button" data-act="view" data-v="' + t[0] + '"' + (t[0] === v ? ' aria-current="page"' : '') + '>' + ico(t[0]) + '<span>' + t[1] + '</span></button>';
+  }).join('') + '</div>';
+}
+function bannerHTML(){
+  var st = S.sync.state;
+  if (!shared()) return '<p class="bandeau">Ce journal n’existe que sur cet appareil. <button class="lien" data-act="goSettings" data-focus="input[name=owner]">Le partager via GitHub</button></p>';
+  if (st === 'error') return '<p class="bandeau alerte">' + esc(S.sync.msg) + ' <button class="lien" data-act="goSettings">Ouvrir les réglages</button></p>';
+  if (!canEdit()) return '<p class="bandeau">Lecture seule : ajoute un jeton dans les réglages pour pouvoir noter. <button class="lien" data-act="goSettings" data-focus="input[name=token]">Ajouter un jeton</button></p>';
+  return '';
+}
+var VIEWS = {};
+
+/* --- Vue Pause --- */
+function choosePause(list){
+  if (list.some(function(p){ return p.id === S.pauseId; })) return S.pauseId;
+  if (!list.length) return null;
+  if (S.date === todayStr()){
+    var hm = pad(new Date().getHours()) + ':' + pad(new Date().getMinutes()), pick = list[0];
+    list.forEach(function(p){ if ((p.time || '') <= hm) pick = p; });
+    return pick.id;
+  }
+  return list[0].id;
+}
+VIEWS.pause = function(){
+  var dis = canEdit() ? '' : ' disabled';
+  var list = pausesOn(S.date);
+  S.pauseId = choosePause(list);
+  var p = S.pauseId ? S.doc.pauses[S.pauseId] : null;
+  var h = bannerHTML();
+  h += '<div class="jour"><button class="nav" type="button" data-act="day" data-d="-1" aria-label="Jour précédent">' + ico('gauche') + '</button>' +
+    '<label class="jour-l"><span class="jour-nom">' + esc(fmtDay(S.date)) + '</span><span class="jour-date">' + esc(fmtDate(S.date)) + '</span>' +
+    '<input type="date" data-change="date" value="' + S.date + '" aria-label="Choisir le jour"></label>' +
+    '<button class="nav" type="button" data-act="day" data-d="1" aria-label="Jour suivant">' + ico('droite') + '</button></div>';
+  if (S.date !== todayStr()) h += '<p class="retour"><button class="lien" data-act="today">Revenir à aujourd’hui</button></p>';
+  h += '<div class="onglets-pause" role="group" aria-label="Pauses du jour">' + list.map(function(x){
+    return '<button class="op" type="button" data-act="pick" data-id="' + x.id + '" aria-pressed="' + (x.id === S.pauseId) + '"><span class="h">' + esc(x.time || '') + '</span>' + esc(x.label || 'Pause') + '</button>';
+  }).join('') + '<button class="op op-plus" type="button" data-act="newPause"' + dis + '>+ Nouvelle pause</button></div>';
+  h += p ? pausePage(p, dis) : emptyDayPage(dis);
+  return h;
+};
+function emptyDayPage(dis){
+  var tpls = activeTemplates();
+  return '<section class="page"><p class="cher">Cher journal,</p><h2 class="page-titre">Rien de noté ce jour-là.</h2>' +
+    '<p class="page-sous">Ouvre une pause pour noter qui est là et comment ça se passe.</p>' +
+    '<div class="pile">' + tpls.map(function(t, i){
+      return '<button class="btn' + (i ? ' btn-sec' : '') + '" type="button" data-act="startTpl" data-id="' + t.id + '"' + dis + '>' + esc(t.label) + ', ' + esc(t.time) + '</button>';
+    }).join('') + '<button class="lien" type="button" data-act="newPause"' + dis + '>Autre pause…</button></div></section>';
+}
+function pausePage(p, dis){
+  var people = activePeople();
+  var c = { present:0, late:0, absent:0, none:0 };
+  var rows = people.map(function(per){ var e = getEntry(p.id, per.id); c[(e && e.presence) || 'none']++; return personRow(p, per, e, dis); }).join('');
+  var parts = [];
+  if (c.present) parts.push(c.present + ' présent' + (c.present > 1 ? 's' : ''));
+  if (c.late) parts.push(c.late + ' en retard');
+  if (c.absent) parts.push(c.absent + ' absent' + (c.absent > 1 ? 's' : ''));
+  if (c.none) parts.push(c.none + ' non noté' + (c.none > 1 ? 's' : ''));
+  var h = '<section class="page"><div class="page-tete"><div><p class="cher">Cher journal,</p>' +
+    '<h2 class="page-titre">' + esc(p.label || 'Pause') + (p.time ? ', ' + esc(p.time) : '') + '</h2>' +
+    (p.note ? '<p class="page-sous">' + esc(p.note) + '</p>' : '') + '</div>' +
+    '<button class="lien" type="button" data-act="editPause"' + dis + '>Modifier</button></div>';
+  if (!people.length){
+    h += '<p class="page-sous" style="margin-top:14px">Personne n’est encore inscrit au journal.</p>' +
+      '<div class="pile"><button class="btn" type="button" data-act="goSettings" data-focus="[data-form=addPerson] input">Ajouter les personnes à suivre</button></div>';
+  } else {
+    h += '<div class="rapide">' + (c.none ? '<button class="lien" type="button" data-act="allPresent"' + dis + '>Tout le monde présent</button>' : '<span></span>') +
+      '<span class="compte">' + parts.join(', ') + '</span></div><ul class="personnes">' + rows + '</ul>';
+  }
+  return h + '</section>';
+}
+function personRow(p, per, e, dis){
+  e = e || {};
+  var pres = e.presence || null, key = entryKey(p.id, per.id), name = esc(per.name);
+  var trace = e.at ? 'noté par ' + esc(e.by || 'quelqu’un') + ' ' + esc(fmtWhen(e.at)) : '';
+  var h = '<li class="pers' + (pres === 'absent' ? ' absent' : '') + '"><div class="pers-tete"><h3 class="pers-nom">' + name + '</h3><span class="pers-trace">' + trace + '</span></div>';
+  h += '<div class="presence" role="group" aria-label="Présence de ' + name + '">' + ['present', 'late', 'absent'].map(function(v){
+    return '<button class="pr pr-' + v + '" type="button" data-act="presence" data-p="' + p.id + '" data-per="' + per.id + '" data-v="' + v + '" aria-pressed="' + (pres === v) + '"' + dis + '>' + PRES[v] + '</button>';
+  }).join('') + '</div>';
+  if (pres !== 'absent'){
+    h += '<div class="comportements" role="group" aria-label="Comportement de ' + name + '">' + activeBehaviors().map(function(b){
+      return '<button class="puce" type="button" data-act="beh" data-p="' + p.id + '" data-per="' + per.id + '" data-b="' + b.id + '" aria-pressed="' + (e['b:' + b.id] === true) + '"' + dis + '>' +
+        (b.emoji ? '<span class="emo" aria-hidden="true">' + esc(b.emoji) + '</span>' : '') + esc(b.label) + '</button>';
+    }).join('') + '</div>';
+  }
+  if (S.openNotes[key] || e.note){
+    h += '<textarea class="note" rows="1" data-input="note" data-key="' + key + '" data-p="' + p.id + '" data-per="' + per.id + '" placeholder="Ce qui s’est passé à la pause…" aria-label="Note sur ' + name + '"' + dis + '>' + esc(e.note || '') + '</textarea>';
+  } else {
+    h += '<div class="zone-note"><button class="lien" type="button" data-act="openNote" data-key="' + key + '"' + dis + '>Ajouter une note</button></div>';
+  }
+  return h + '</li>';
+}
+
+/* --- Vue Journal --- */
+VIEWS.journal = function(){
+  var people = allPeople();
+  var who = S.ui.jperson && S.doc.people[S.ui.jperson] ? S.ui.jperson : '';
+  var h = '<label class="filtre"><span>Voir</span><select data-change="jperson" aria-label="Filtrer par personne"><option value="">Tout le monde</option>' +
+    people.map(function(p){ return '<option value="' + p.id + '"' + (p.id === who ? ' selected' : '') + '>' + esc(p.name) + (p.archived ? ' (retiré·e)' : '') + '</option>'; }).join('') + '</select></label>';
+  var byDate = {};
+  livePauses().forEach(function(p){
+    var lines = (who ? people.filter(function(x){ return x.id === who; }) : people).map(function(per){ var e = getEntry(p.id, per.id); return entryHasData(e) ? entryLine(e, per) : ''; }).join('');
+    if (who && !lines) return;
+    (byDate[p.date] = byDate[p.date] || []).push({ p:p, lines:lines });
+  });
+  var dates = Object.keys(byDate).sort().reverse();
+  if (!dates.length){
+    return h + '<section class="page"><p class="cher">Cher journal,</p><h2 class="page-titre">' + (who ? 'Rien de noté pour cette personne.' : 'Tes pages sont encore blanches.') + '</h2>' +
+      '<p class="page-sous">Les pauses notées s’afficheront ici, de la plus récente à la plus ancienne.</p></section>';
+  }
+  dates.slice(0, S.ui.jlimit).forEach(function(d){
+    h += '<section class="page"><p class="cher">' + esc(fmtDay(d)) + '</p><h2 class="page-titre">' + esc(fmtDate(d)) + '</h2>';
+    byDate[d].sort(function(a, b){ return byTime(a.p, b.p); }).forEach(function(x){
+      h += '<h3 class="j-pause"><button class="j-titre" type="button" data-act="openPause" data-date="' + d + '" data-id="' + x.p.id + '">' + esc(x.p.label || 'Pause') + (x.p.time ? ', ' + esc(x.p.time) : '') + '</button></h3>' +
+        (x.p.note ? '<p class="page-sous">' + esc(x.p.note) + '</p>' : '') +
+        (x.lines ? '<ul class="j-liste">' + x.lines + '</ul>' : '<p class="page-sous">Personne n’a encore été noté.</p>');
+    });
+    h += '</section>';
+  });
+  if (dates.length > S.ui.jlimit) h += '<div class="plus"><button class="btn btn-sec" type="button" data-act="more">Afficher des jours plus anciens</button></div>';
+  return h;
+};
+function entryLine(e, per){
+  var bs = behaviorsOf(e).map(function(b){ return (b.emoji ? b.emoji + ' ' : '') + b.label; }).join(', ');
+  return '<li class="ligne"><span class="l-nom">' + esc(per.name) + '</span><span class="l-pres l-' + (e.presence || 'none') + '">' + (e.presence ? PRES[e.presence].toLowerCase() : 'présence non notée') + '</span>' +
+    (bs && e.presence !== 'absent' ? '<span class="l-comp">' + esc(bs) + '</span>' : '') +
+    (e.note ? '<span class="l-note">« ' + esc(e.note) + ' »</span>' : '') + '</li>';
+}
+
+/* --- Vue Bilan --- */
+VIEWS.bilan = function(){
+  var ranges = [['7', '7 jours'], ['30', '30 jours'], ['90', '3 mois'], ['all', 'Tout']];
+  var r = ranges.some(function(x){ return x[0] === S.ui.range; }) ? S.ui.range : '30';
+  var h = '<div class="segment" role="group" aria-label="Période">' + ranges.map(function(x){
+    return '<button type="button" data-act="range" data-v="' + x[0] + '" aria-pressed="' + (x[0] === r) + '">' + x[1] + '</button>';
+  }).join('') + '</div>';
+  var today = todayStr(), from = r === 'all' ? '0000-00-00' : addDays(today, -(+r - 1));
+  var ps = livePauses().filter(function(p){ return p.date >= from && p.date <= today; });
+  var label = r === 'all' ? 'depuis le début' : r === '90' ? 'sur les 3 derniers mois' : 'sur les ' + r + ' derniers jours';
+  if (!ps.length) return h + '<section class="page"><p class="cher">Bilan</p><h2 class="page-titre">Aucune pause notée ' + label + '.</h2></section>';
+  var people = allPeople().filter(function(per){ return !per.archived || ps.some(function(p){ return entryHasData(getEntry(p.id, per.id)); }); });
+  h += '<section class="page"><p class="cher">Bilan</p><h2 class="page-titre">' + ps.length + ' pause' + (ps.length > 1 ? 's' : '') + ' notée' + (ps.length > 1 ? 's' : '') + ' ' + label + '</h2>';
+  if (!people.length) h += '<p class="page-sous" style="margin-top:12px">Ajoute des personnes dans les réglages pour voir leur bilan.</p>';
+  people.forEach(function(per){
+    var n = { present:0, late:0, absent:0 }, counts = {};
+    ps.forEach(function(p){
+      var e = getEntry(p.id, per.id);
+      if (!e || !e.presence) return;
+      n[e.presence]++;
+      if (e.presence !== 'absent') behaviorsOf(e).forEach(function(b){ counts[b.id] = (counts[b.id] || 0) + 1; });
+    });
+    var noted = n.present + n.late + n.absent, here = n.present + n.late;
+    var name = esc(per.name);
+    h += '<div class="stat"><h3 class="pers-nom">' + name + (per.archived ? ' <span class="retire">(retiré·e)</span>' : '') + '</h3>';
+    if (!noted){ h += '<p class="phrase">Rien de noté sur cette période.</p></div>'; return; }
+    var pct = Math.round(here / noted * 100);
+    h += '<p class="phrase">Présent·e à ' + here + ' pause' + (here > 1 ? 's' : '') + ' sur ' + noted + ' notée' + (noted > 1 ? 's' : '') + (n.late ? ', dont ' + n.late + ' en retard' : '') + '.</p>';
+    h += barRow('Présence', pct, pct + ' %', 'sang', per.name + ' : présent·e ' + here + ' fois sur ' + noted + ' (' + pct + ' %)', true);
+    var bs = allBehaviors().filter(function(b){ return counts[b.id]; }).sort(function(a, b){ return counts[b.id] - counts[a.id] || byOrder(a, b); });
+    if (here && !bs.length) h += '<p class="phrase" style="margin-top:8px!important">Aucun comportement coché.</p>';
+    if (here) bs.forEach(function(b){
+      var k = counts[b.id], q = Math.round(k / here * 100);
+      h += barRow((b.emoji ? b.emoji + ' ' : '') + b.label, q, k + ' sur ' + here, '', b.label + ' : ' + k + ' pause' + (k > 1 ? 's' : '') + ' sur ' + here + ' où ' + per.name + ' était là (' + q + ' %)');
+    });
+    h += '</div>';
+  });
+  return h + '</section>';
+};
+function barRow(label, pct, val, cls, tip, strong){
+  return '<div class="rang' + (strong ? ' tete-rang' : '') + '" title="' + esc(tip) + '"><span>' + esc(label) + '</span>' +
+    '<span class="piste" role="img" aria-label="' + esc(tip) + '"><span class="rempli ' + cls + '" style="width:' + Math.max(0, Math.min(100, pct)) + '%"></span></span>' +
+    '<span class="val">' + esc(val) + '</span></div>';
+}
+
+/* --- Vue Réglages --- */
+VIEWS.reglages = function(){
+  var dis = canEdit() ? '' : ' disabled';
+  var c = S.cfg || {};
+  var defOwner = /\.github\.io$/i.test(location.hostname) ? location.hostname.split('.')[0] : '';
+  var h = '<section class="page"><h2>Toi</h2>' +
+    '<label class="champ"><span>Ton prénom</span><input name="me" data-change="me" value="' + esc(S.me) + '" maxlength="40" autocomplete="given-name"><small>Il signe les notes que tu écris (« noté par… »).</small></label></section>';
+
+  // Partage
+  var etat;
+  if (S.cnxMsg) etat = '<p class="cnx' + (S.cnxMsg === 'Vérification du dépôt…' ? '' : ' ko') + '">' + esc(S.cnxMsg) + '</p>';
+  else if (shared()) etat = '<p class="cnx' + (S.sync.state === 'error' ? ' ko' : '') + '">' + (S.sync.state === 'error' ? esc(S.sync.msg) : 'Relié au dépôt <strong>' + esc(c.owner + '/' + c.repo) + '</strong>, fichier ' + esc(c.path) + (c.token ? '.' : ', en lecture seule.')) + '</p>';
+  else etat = '<p class="cnx">Pas encore relié : les notes restent sur cet appareil.</p>';
+  h += '<section class="page"><h2>Partage via GitHub</h2>' + etat +
+    '<form data-form="cnx" autocomplete="off">' +
+    '<div class="duo">' + champ('owner', 'Compte GitHub', 'text', c.owner || defOwner, '', 'autocapitalize="off" spellcheck="false" required') +
+    champ('repo', 'Dépôt des données', 'text', c.repo || 'journal-pauses-donnees', '', 'autocapitalize="off" spellcheck="false" required') + '</div>' +
+    '<div class="duo">' + champ('path', 'Fichier', 'text', c.path || 'journal.json', '', 'autocapitalize="off" spellcheck="false"') +
+    champ('branch', 'Branche', 'text', c.branch || 'main', '', 'autocapitalize="off" spellcheck="false"') + '</div>' +
+    champ('token', 'Jeton d’accès GitHub', 'password', '', c.token ? 'Un jeton est enregistré sur cet appareil. Laisse vide pour le garder.' : 'Jeton « fine-grained » limité à ce dépôt, permission Contents en lecture et écriture. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Créer un jeton</a>. Il reste sur cet appareil.', 'autocapitalize="off" spellcheck="false" placeholder="' + (c.token ? '•••••••• (enregistré)' : 'github_pat_…') + '"') +
+    '<div class="actions" style="display:flex;flex-wrap:wrap;gap:10px"><button class="btn" type="submit">' + (shared() ? 'Enregistrer et relier' : 'Relier le journal') + '</button>' +
+    (shared() ? '<button class="btn btn-sec" type="button" data-act="disconnect">Délier cet appareil</button>' : '') + '</div></form>';
+  if (shared() && c.token){
+    h += '<h3 style="margin-top:20px;font-size:20px">Inviter quelqu’un</h3><p class="aide">Le lien contient le jeton : envoie-le seulement aux personnes qui tiennent le journal avec toi. En l’ouvrant, elles n’ont qu’à donner leur prénom.</p>' +
+      '<div class="actions" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px">' + (navigator.share ? '<button class="btn" type="button" data-act="shareInvite">Envoyer le lien d’invitation</button>' : '') +
+      '<button class="btn btn-sec" type="button" data-act="copyInvite">Copier le lien</button></div>';
+  }
+  h += '</section>';
+
+  // Personnes
+  var act = activePeople(), arch = archivedPeople();
+  h += '<section class="page"><h2>Personnes suivies</h2>' +
+    '<form class="ajout" data-form="addPerson"><input name="name" placeholder="Prénom" aria-label="Prénom de la personne à ajouter" maxlength="40" autocomplete="off"' + dis + '><button class="btn" type="submit"' + dis + '>Ajouter</button></form>' +
+    (act.length ? '<ul class="liste">' + act.map(function(p){
+      return '<li><span class="nom">' + esc(p.name) + '</span><button class="mini" type="button" data-act="editPerson" data-id="' + p.id + '"' + dis + '>Modifier</button></li>';
+    }).join('') + '</ul>' : '<p class="aide">Personne pour l’instant. Ajoute un prénom ci-dessus.</p>') +
+    (arch.length ? '<details><summary>Personnes retirées (' + arch.length + ')</summary><ul class="liste">' + arch.map(function(p){
+      return '<li><span class="nom">' + esc(p.name) + '</span><button class="mini" type="button" data-act="restorePerson" data-id="' + p.id + '"' + dis + '>Remettre</button></li>';
+    }).join('') + '</ul></details>' : '') +
+    '<p class="aide">Retirer une personne la cache des prochaines pauses ; son historique reste dans le journal et le bilan.</p></section>';
+
+  // Comportements
+  var bs = activeBehaviors(), barch = allBehaviors().filter(function(b){ return b.archived; });
+  h += '<section class="page"><h2>Comportements</h2><p class="aide" style="margin-top:0">On peut en cocher plusieurs par personne. Ceux d’un même groupe s’excluent entre eux (par exemple Parle et Ne parle pas).</p><ul class="liste">' +
+    bs.map(function(b, i){
+      return '<li><span class="nom">' + (b.emoji ? esc(b.emoji) + ' ' : '') + esc(b.label) + (b.group ? '<span class="groupe">groupe ' + esc(b.group) + '</span>' : '') + '</span>' +
+        '<button class="mini" type="button" data-act="moveBehavior" data-id="' + b.id + '" data-d="-1" aria-label="Monter ' + esc(b.label) + '"' + (i === 0 ? ' disabled' : dis) + '>' + ico('haut') + '</button>' +
+        '<button class="mini" type="button" data-act="moveBehavior" data-id="' + b.id + '" data-d="1" aria-label="Descendre ' + esc(b.label) + '"' + (i === bs.length - 1 ? ' disabled' : dis) + '>' + ico('bas') + '</button>' +
+        '<button class="mini" type="button" data-act="editBehavior" data-id="' + b.id + '"' + dis + '>Modifier</button></li>';
+    }).join('') + '</ul>' +
+    '<form class="ajout" data-form="addBehavior"><input name="emoji" class="emoji-in" placeholder="🙂" maxlength="8" aria-label="Émoji (facultatif)"' + dis + '><input name="label" placeholder="Comportement" aria-label="Nom du comportement" maxlength="40"' + dis + '><button class="btn" type="submit"' + dis + '>Ajouter</button></form>' +
+    (barch.length ? '<details><summary>Comportements retirés (' + barch.length + ')</summary><ul class="liste">' + barch.map(function(b){
+      return '<li><span class="nom">' + (b.emoji ? esc(b.emoji) + ' ' : '') + esc(b.label) + '</span><button class="mini" type="button" data-act="restoreBehavior" data-id="' + b.id + '"' + dis + '>Remettre</button></li>';
+    }).join('') + '</ul></details>' : '') + '</section>';
+
+  // Pauses habituelles
+  var ts = activeTemplates();
+  h += '<section class="page"><h2>Pauses habituelles</h2><p class="aide" style="margin-top:0">Elles apparaissent en raccourci quand aucune pause n’est encore notée dans la journée.</p><ul class="liste">' +
+    ts.map(function(t){ return '<li><span class="nom">' + esc(t.label) + ', ' + esc(t.time) + '</span><button class="mini" type="button" data-act="editTemplate" data-id="' + t.id + '"' + dis + '>Modifier</button></li>'; }).join('') + '</ul>' +
+    '<form class="ajout trois" data-form="addTemplate"><input name="label" placeholder="Nom de la pause" aria-label="Nom de la pause habituelle" maxlength="40"' + dis + '><input name="time" type="time" value="10:00" class="heure-in" aria-label="Heure"' + dis + '><button class="btn" type="submit"' + dis + '>Ajouter</button></form></section>';
+
+  // Journal & données
+  h += '<section class="page"><h2>Le journal</h2>' +
+    '<label class="champ"><span>Titre affiché en haut</span><input name="title" data-change="title" value="' + esc(title()) + '" maxlength="50"' + dis + '></label>' +
+    '<div class="pile" style="margin-top:6px">' +
+    '<button class="btn btn-sec" type="button" data-act="exportCsv">Exporter pour Excel (CSV)</button>' +
+    '<button class="btn btn-sec" type="button" data-act="exportJson">Télécharger une sauvegarde (JSON)</button>' +
+    '<label class="btn btn-sec fichier">Importer une sauvegarde<input type="file" accept=".json,application/json" data-change="importFile"' + dis + '></label>' +
+    (shared() ? '<button class="btn btn-sec" type="button" data-act="sync">Synchroniser maintenant</button>' : '') +
+    '</div><p class="aide">Une sauvegarde importée est fusionnée avec le journal : rien n’est écrasé.</p></section>';
+  h += '<p class="version">Journal des pauses, version ' + VERSION + '</p>';
+  return h;
+};
+
+/* ============================================================
+   Actions
+   ============================================================ */
+var pendingNotes = {}, noteTimer = null;
+function onNoteInput(el){
+  autosize(el);
+  pendingNotes[el.dataset.key] = { p:el.dataset.p, per:el.dataset.per, v:el.value };
+  clearTimeout(noteTimer); noteTimer = setTimeout(flushNotes, 700);
+}
+function flushNotes(){
+  clearTimeout(noteTimer);
+  var list = values(pendingNotes); pendingNotes = {};
+  list.forEach(function(n){ var e = getEntry(n.p, n.per) || {}; if ((e.note || '') !== n.v) setEntry(n.p, n.per, { note:n.v }, { silent:true }); });
+}
+function currentPause(){ return S.pauseId ? S.doc.pauses[S.pauseId] : null; }
+function createPause(label, time){
+  var id = uid();
+  S.pauseId = id;
+  setFields('pauses', id, { date:S.date, time:time || '', label:(label || '').trim() || 'Pause', note:'', deleted:false });
+}
+function sheetNewPause(){
+  var tpls = activeTemplates();
+  openSheet({
+    title:'Nouvelle pause',
+    html:(tpls.length ? '<div class="modeles-mini">' + tpls.map(function(t){ return '<button type="button" class="mini" data-fill="' + esc(JSON.stringify({ label:t.label, time:t.time })) + '">' + esc(t.label) + ', ' + esc(t.time) + '</button>'; }).join('') + '</div>' : '') +
+      champ('label', 'Nom de la pause', 'text', 'Pause', '', 'maxlength="40"') + champ('time', 'Heure', 'time', nowHM()) +
+      '<p class="aide">Pour le ' + esc(fmtDay(S.date) + ' ' + fmtDate(S.date)) + '.</p>',
+    actions:[{ label:'Créer la pause', run:function(fd){ createPause(fd.label, fd.time); } }]
+  });
+}
+function sheetEditPause(p){
+  if (!p) return;
+  openSheet({
+    title:'Modifier la pause',
+    html:champ('label', 'Nom de la pause', 'text', p.label, '', 'maxlength="40"') +
+      '<div class="duo">' + champ('time', 'Heure', 'time', p.time) + champ('date', 'Jour', 'date', p.date) + '</div>' +
+      '<label class="champ"><span>Note sur la pause (facultatif)</span><textarea name="note" rows="2" maxlength="300">' + esc(p.note || '') + '</textarea></label>',
+    actions:[
+      { label:'Enregistrer', run:function(fd){ if (fd.date){ S.date = fd.date; } setFields('pauses', p.id, { label:(fd.label || '').trim() || 'Pause', time:fd.time || '', date:fd.date || p.date, note:(fd.note || '').trim() }); } },
+      { label:'Supprimer la pause', cls:'btn-danger', run:function(fd, form, btn){
+        if (!btn.dataset.armed){ btn.dataset.armed = '1'; btn.textContent = 'Toucher encore pour supprimer'; return false; }
+        S.pauseId = null; setFields('pauses', p.id, { deleted:true }); toast('Pause supprimée.');
+      } }
+    ]
+  });
+}
+function sheetPerson(per){
+  openSheet({
+    title:'Modifier ' + per.name,
+    html:champ('name', 'Prénom', 'text', per.name, '', 'maxlength="40"'),
+    actions:[
+      { label:'Enregistrer', run:function(fd){ var n = (fd.name || '').trim(); if (n) setFields('people', per.id, { name:n }); } },
+      { label:'Retirer du journal', cls:'btn-danger', run:function(){ setFields('people', per.id, { archived:true }); toast(per.name + ' est retiré·e des prochaines pauses.'); } }
+    ]
+  });
+}
+function sheetBehavior(b){
+  openSheet({
+    title:'Modifier un comportement',
+    html:'<div class="duo" style="grid-template-columns:5em 1fr">' + champ('emoji', 'Émoji', 'text', b.emoji || '', '', 'maxlength="8"') + champ('label', 'Nom', 'text', b.label, '', 'maxlength="40"') + '</div>' +
+      champ('group', 'Groupe (facultatif)', 'text', b.group || '', 'Les comportements d’un même groupe s’excluent : en cocher un décoche les autres. Exemple : « parole » pour Parle et Ne parle pas.', 'maxlength="20" autocapitalize="off"'),
+    actions:[
+      { label:'Enregistrer', run:function(fd){ var l = (fd.label || '').trim(); if (l) setFields('behaviors', b.id, { emoji:(fd.emoji || '').trim(), label:l, group:(fd.group || '').trim().toLowerCase() }); } },
+      { label:'Retirer', cls:'btn-danger', run:function(){ setFields('behaviors', b.id, { archived:true }); toast('« ' + b.label + ' » ne sera plus proposé. L’historique est gardé.'); } }
+    ]
+  });
+}
+function sheetTemplate(t){
+  openSheet({
+    title:'Modifier la pause habituelle',
+    html:champ('label', 'Nom', 'text', t.label, '', 'maxlength="40"') + champ('time', 'Heure', 'time', t.time),
+    actions:[
+      { label:'Enregistrer', run:function(fd){ var l = (fd.label || '').trim(); if (l) setFields('templates', t.id, { label:l, time:fd.time || '' }); } },
+      { label:'Supprimer', cls:'btn-danger', run:function(){ setFields('templates', t.id, { archived:true }); } }
+    ]
+  });
+}
+function exportCsv(){
+  var q = function(v){ v = String(v == null ? '' : v); return /[;"\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  var rows = [['Date', 'Heure', 'Pause', 'Personne', 'Présence', 'Comportements', 'Note', 'Noté par', 'Noté le']];
+  var people = allPeople();
+  livePauses().sort(function(a, b){ return a.date.localeCompare(b.date) || byTime(a, b); }).forEach(function(p){
+    people.forEach(function(per){
+      var e = getEntry(p.id, per.id);
+      if (!entryHasData(e)) return;
+      rows.push([fmtShort(p.date), p.time || '', p.label || '', per.name, e.presence ? PRES[e.presence] : '', e.presence === 'absent' ? '' : behaviorsOf(e).map(function(b){ return b.label; }).join(', '), e.note || '', e.by || '', e.at ? new Date(e.at).toLocaleString('fr-FR') : '']);
+    });
+  });
+  download('journal-des-pauses-' + todayStr() + '.csv', '﻿' + rows.map(function(r){ return r.map(q).join(';'); }).join('\r\n'), 'text/csv;charset=utf-8');
+}
+
+var A = {
+  view:function(el){ S.ui.view = el.dataset.v; saveUi(); render(true); },
+  day:function(el){ S.date = addDays(S.date, +el.dataset.d); S.pauseId = null; render(); },
+  today:function(){ S.date = todayStr(); S.pauseId = null; render(); },
+  pick:function(el){ S.pauseId = el.dataset.id; render(); },
+  newPause:function(){ sheetNewPause(); },
+  startTpl:function(el){
+    var t = S.doc.templates[el.dataset.id]; if (!t) return;
+    var ex = pausesOn(S.date).filter(function(p){ return p.label === t.label && p.time === t.time; })[0];
+    if (ex){ S.pauseId = ex.id; render(); } else createPause(t.label, t.time);
+  },
+  editPause:function(){ sheetEditPause(currentPause()); },
+  allPresent:function(){
+    var p = currentPause(); if (!p) return;
+    activePeople().forEach(function(per){ var e = getEntry(p.id, per.id); if (!e || !e.presence) setEntry(p.id, per.id, { presence:'present' }, { silent:true }); });
+    render();
+  },
+  presence:function(el){
+    var e = getEntry(el.dataset.p, el.dataset.per) || {}, v = el.dataset.v;
+    setEntry(el.dataset.p, el.dataset.per, { presence:e.presence === v ? null : v });
+  },
+  beh:function(el){
+    var pid = el.dataset.p, per = el.dataset.per, bid = el.dataset.b;
+    var e = getEntry(pid, per) || {}, on = e['b:' + bid] !== true, b = S.doc.behaviors[bid], f = {};
+    f['b:' + bid] = on;
+    if (on && b && b.group) activeBehaviors().forEach(function(o){ if (o.id !== bid && o.group === b.group && e['b:' + o.id] === true) f['b:' + o.id] = false; });
+    if (on && !e.presence) f.presence = 'present';
+    setEntry(pid, per, f);
+  },
+  openNote:function(el){ S.openNotes[el.dataset.key] = true; S.focusSel = 'textarea[data-key="' + el.dataset.key + '"]'; render(); },
+  sync:function(){
+    if (!shared()){ toast('Ce journal n’est que sur cet appareil : relie-le à GitHub dans les réglages.'); return; }
+    S.backoffUntil = 0; flushNotes(); if (S.pending) syncNow(); else poll(true);
+  },
+  goSettings:function(el){ S.ui.view = 'reglages'; S.focusSel = el.dataset.focus || null; saveUi(); render(true); },
+  openPause:function(el){ S.date = el.dataset.date; S.pauseId = el.dataset.id; S.ui.view = 'pause'; saveUi(); render(true); },
+  more:function(){ S.ui.jlimit += 20; render(); },
+  range:function(el){ S.ui.range = el.dataset.v; saveUi(); render(); },
+  editPerson:function(el){ var p = S.doc.people[el.dataset.id]; if (p) sheetPerson(p); },
+  restorePerson:function(el){ setFields('people', el.dataset.id, { archived:false }); },
+  editBehavior:function(el){ var b = S.doc.behaviors[el.dataset.id]; if (b) sheetBehavior(b); },
+  restoreBehavior:function(el){ setFields('behaviors', el.dataset.id, { archived:false }); },
+  moveBehavior:function(el){
+    var list = activeBehaviors(), i = list.findIndex(function(b){ return b.id === el.dataset.id; }), j = i + (+el.dataset.d);
+    if (i < 0 || j < 0 || j >= list.length) return;
+    var tmp = list[i]; list[i] = list[j]; list[j] = tmp;
+    list.forEach(function(b, k){ if (b.order !== k) setFields('behaviors', b.id, { order:k }, { silent:true }); });
+    render();
+  },
+  editTemplate:function(el){ var t = S.doc.templates[el.dataset.id]; if (t) sheetTemplate(t); },
+  disconnect:function(){
+    S.cfg = null; store.del(K.cfg); S.cnxMsg = null; S.etag = null; setSync('local');
+    toast('Appareil délié : les notes déjà présentes restent ici.'); render();
+  },
+  shareInvite:function(){
+    var url = inviteUrl();
+    navigator.share({ title:'Journal des pauses', text:'Rejoins le journal des pauses :', url:url }).catch(function(e){ if (e && e.name !== 'AbortError') copyText(url, 'Lien d’invitation copié.'); });
+  },
+  copyInvite:function(){ copyText(inviteUrl(), 'Lien d’invitation copié.'); },
+  exportCsv:function(){ exportCsv(); },
+  exportJson:function(){ download('journal-des-pauses-sauvegarde-' + todayStr() + '.json', serialize(S.doc), 'application/json'); }
+};
+var C = {
+  date:function(el){ if (el.value){ S.date = el.value; S.pauseId = null; render(); } },
+  jperson:function(el){ S.ui.jperson = el.value; S.ui.jlimit = 20; saveUi(); render(); },
+  me:function(el){ setMe(el.value); toast(S.me ? 'Prénom enregistré.' : 'Prénom effacé.'); },
+  title:function(el){ setFields('meta', 'main', { title:el.value.trim() || 'Journal des pauses' }); },
+  importFile:function(el){
+    var f = el.files && el.files[0]; if (!f) return;
+    f.text().then(function(t){
+      var d = parseRemote(t, f.name);
+      S.doc = mergeDocs(S.doc, d); touched(); render(); toast('Sauvegarde importée et fusionnée.');
+    }).catch(function(e){ toast(e.message || 'Fichier illisible.'); });
+    el.value = '';
+  }
+};
+var FORMS = {
+  cnx:function(fd){
+    var owner = (fd.owner || '').trim(), repo = (fd.repo || '').trim();
+    if (!owner || !repo){ S.cnxMsg = 'Indique le compte GitHub et le nom du dépôt des données.'; render(); return; }
+    var token = (fd.token || '').trim() || (S.cfg && S.cfg.token) || '';
+    askConnect({ owner:owner, repo:repo, branch:(fd.branch || '').trim() || 'main', path:(fd.path || '').trim().replace(/^\/+/, '') || 'journal.json', token:token });
+  },
+  addPerson:function(fd){
+    var n = (fd.name || '').trim(); if (!n) return;
+    if (activePeople().some(function(p){ return p.name.toLowerCase() === n.toLowerCase(); })){ toast(n + ' est déjà dans le journal.'); return; }
+    S.focusSel = '[data-form=addPerson] input';
+    if (setFields('people', uid(), { name:n, archived:false })) toast(n + ' ajouté·e au journal.');
+  },
+  addBehavior:function(fd){
+    var l = (fd.label || '').trim(); if (!l) return;
+    S.focusSel = '[data-form=addBehavior] input[name=label]';
+    setFields('behaviors', uid(), { emoji:(fd.emoji || '').trim(), label:l, group:'', order:activeBehaviors().length, archived:false });
+  },
+  addTemplate:function(fd){
+    var l = (fd.label || '').trim(); if (!l) return;
+    setFields('templates', uid(), { label:l, time:fd.time || '', order:0, archived:false });
+  }
+};
+
+document.addEventListener('click', function(e){
+  var el = e.target.closest('[data-act]');
+  if (!el || el.disabled || el.closest('#feuille-root')) return;
+  var f = A[el.dataset.act]; if (!f) return;
+  e.preventDefault(); flushNotes(); f(el, e);
+});
+document.addEventListener('change', function(e){
+  var el = e.target.closest && e.target.closest('[data-change]');
+  if (!el || el.closest('#feuille-root')) return;
+  var f = C[el.dataset.change]; if (f){ flushNotes(); f(el); }
+});
+document.addEventListener('input', function(e){ if (e.target.matches && e.target.matches('textarea[data-input=note]')) onNoteInput(e.target); });
+document.addEventListener('focusout', function(e){
+  if (e.target.matches && e.target.matches('textarea[data-input=note]')) flushNotes();
+  if (renderPending) setTimeout(function(){ if (renderPending && !isEditing()) render(); }, 80);
+});
+document.addEventListener('submit', function(e){
+  var f = e.target.closest('form[data-form]'); if (!f) return;
+  e.preventDefault(); flushNotes();
+  var fd = {}; new FormData(f).forEach(function(v, k){ fd[k] = v; });
+  var h = FORMS[f.dataset.form]; if (h) h(fd, f);
+});
+
+/* Démarrage */
+render();
+checkInvite();
+if (shared()){ if (S.pending && canEdit()) syncNow(); else poll(true); }
+})();
+</script>
+</body>
+</html>
