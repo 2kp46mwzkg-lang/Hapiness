@@ -168,6 +168,13 @@ button:disabled{cursor:not-allowed;opacity:.45}
 .champ > span{display:block;font-size:15px;color:var(--encre-2);margin-bottom:4px}
 .champ input,.champ select,.champ textarea,.ajout input,.saisie{width:100%;font-size:17px;padding:10px 12px;border:1px solid rgba(43,29,23,.32);border-radius:7px;background:rgba(255,255,255,.45);color:var(--encre)}
 .champ small{display:block;font-size:14px;color:var(--encre-3);margin-top:4px;line-height:1.35}
+.etiq{display:block;font-size:15px;color:var(--encre-2);margin-bottom:4px}
+.jeton{display:flex;gap:6px;align-items:stretch}
+.jeton input{flex:1;min-width:0}
+.masque{-webkit-text-security:disc}
+.champ small .ok{color:#2d5a2a}
+.champ small .ko{color:var(--sang)}
+.champ small b{font-weight:600}
 .duo{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
 .ajout{display:flex;gap:8px;margin-top:12px}
 .ajout input{flex:1;min-width:0}
@@ -220,7 +227,7 @@ summary{cursor:pointer;color:var(--encre-2);font-size:16px}
 <script>
 (function(){
 'use strict';
-var VERSION = '1.0';
+var VERSION = '1.1';
 
 /* ============================================================
    Outils
@@ -368,6 +375,26 @@ function hasNewer(a, b){
 function serialize(doc){
   return JSON.stringify(doc, function(k, v){ return (k === 'id' && this && this._t) ? undefined : v; }) + '\n';
 }
+/* Jeton : on extrait le jeton même si le texte collé contient autre chose (espaces, retour à la ligne, libellé) */
+function cleanToken(v){
+  v = String(v || '');
+  var m = v.match(/github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9]{20,}/);
+  return m ? m[0] : v.replace(/\s+/g, '');
+}
+function tokenOk(t){ return /^(github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,})$/.test(t); }
+function tokenHint(v){
+  var t = cleanToken(v);
+  if (!t) return S.cfg && S.cfg.token
+    ? 'Un jeton est enregistré sur cet appareil. Laisse vide pour le garder.'
+    : 'Jeton « fine-grained » limité à ce dépôt, permission Contents en lecture et écriture. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Créer un jeton</a>. Il reste sur cet appareil.';
+  if (tokenOk(t)) return '<b class="ok">Jeton reconnu</b> : ' + esc(t.slice(0, 15)) + '…' + esc(t.slice(-4)) + ' (' + t.length + ' caractères). Touche « Relier le journal ».';
+  return '<b class="ko">Ce n’est pas un jeton complet</b> : il doit commencer par github_pat_ et faire environ 90 caractères. Recopie-le depuis GitHub.';
+}
+function showTokenState(v){
+  var h = $('#jeton-etat'); if (h) h.innerHTML = tokenHint(v);
+  var box = $('.cnx');
+  if (tokenOk(cleanToken(v)) && S.cnxMsg && box){ S.cnxMsg = null; box.className = 'cnx'; box.textContent = 'Jeton prêt : touche « Relier le journal ».'; }
+}
 function hasUserData(doc){
   return values(doc.pauses).some(function(p){ return !p.deleted; }) || values(doc.people).some(function(p){ return !p.archived; });
 }
@@ -390,7 +417,8 @@ var S = {
   lastSync: null,
   backoffUntil: 0,
   lastTouch: null,
-  cnxMsg: null
+  cnxMsg: null,
+  cnxDraft: {}
 };
 S.ui.jlimit = 20;
 if (S.cfg) S.sync.state = S.pending ? 'pending' : 'ok';
@@ -637,7 +665,7 @@ async function doConnect(cfg, keepLocal){
     if (!keepLocal){ S.doc = seedDoc(); S.pending = false; }
     else if (hasUserData(S.doc)) S.pending = true;
     S.cfg = cfg; store.set(K.cfg, cfg);
-    S.etag = null; S.backoffUntil = 0; S.cnxMsg = null;
+    S.etag = null; S.backoffUntil = 0; S.cnxMsg = null; S.cnxDraft = {};
     await syncNow();
     if (S.sync.state === 'error' || S.sync.state === 'offline') S.cnxMsg = S.sync.msg;
     else toast(cfg.token ? 'Journal relié : tes notes sont partagées.' : 'Journal relié en lecture seule.');
@@ -983,7 +1011,8 @@ function barRow(label, pct, val, cls, tip, strong){
 /* --- Vue Réglages --- */
 VIEWS.reglages = function(){
   var dis = canEdit() ? '' : ' disabled';
-  var c = S.cfg || {};
+  var c = S.cfg || {}, dr = S.cnxDraft;
+  function dv(k, d){ return dr[k] != null ? dr[k] : d; }
   var defOwner = /\.github\.io$/i.test(location.hostname) ? location.hostname.split('.')[0] : '';
   var h = '<section class="page"><h2>Toi</h2>' +
     '<label class="champ"><span>Ton prénom</span><input name="me" data-change="me" value="' + esc(S.me) + '" maxlength="40" autocomplete="given-name"><small>Il signe les notes que tu écris (« noté par… »).</small></label></section>';
@@ -995,11 +1024,15 @@ VIEWS.reglages = function(){
   else etat = '<p class="cnx">Pas encore relié : les notes restent sur cet appareil.</p>';
   h += '<section class="page"><h2>Partage via GitHub</h2>' + etat +
     '<form data-form="cnx" autocomplete="off">' +
-    '<div class="duo">' + champ('owner', 'Compte GitHub', 'text', c.owner || defOwner, '', 'autocapitalize="off" spellcheck="false" required') +
-    champ('repo', 'Dépôt des données', 'text', c.repo || 'journal-pauses-donnees', '', 'autocapitalize="off" spellcheck="false" required') + '</div>' +
-    '<div class="duo">' + champ('path', 'Fichier', 'text', c.path || 'journal.json', '', 'autocapitalize="off" spellcheck="false"') +
-    champ('branch', 'Branche', 'text', c.branch || 'main', '', 'autocapitalize="off" spellcheck="false"') + '</div>' +
-    champ('token', 'Jeton d’accès GitHub', 'password', '', c.token ? 'Un jeton est enregistré sur cet appareil. Laisse vide pour le garder.' : 'Jeton « fine-grained » limité à ce dépôt, permission Contents en lecture et écriture. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Créer un jeton</a>. Il reste sur cet appareil.', 'autocapitalize="off" spellcheck="false" placeholder="' + (c.token ? '•••••••• (enregistré)' : 'github_pat_…') + '"') +
+    '<div class="duo">' + champ('owner', 'Compte GitHub', 'text', dv('owner', c.owner || defOwner), '', 'autocapitalize="off" spellcheck="false" required') +
+    champ('repo', 'Dépôt des données', 'text', dv('repo', c.repo || 'journal-pauses-donnees'), '', 'autocapitalize="off" spellcheck="false" required') + '</div>' +
+    '<div class="duo">' + champ('path', 'Fichier', 'text', dv('path', c.path || 'journal.json'), '', 'autocapitalize="off" spellcheck="false"') +
+    champ('branch', 'Branche', 'text', dv('branch', c.branch || 'main'), '', 'autocapitalize="off" spellcheck="false"') + '</div>' +
+    '<div class="champ"><label class="etiq" for="jeton">Jeton d’accès GitHub</label><div class="jeton">' +
+    '<input id="jeton" name="token" type="text" class="masque" value="' + esc(dr.token || '') + '" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="' + (c.token ? '•••••••• (enregistré)' : 'github_pat_…') + '" aria-describedby="jeton-etat">' +
+    '<button type="button" class="mini" data-act="pasteToken">Coller</button>' +
+    '<button type="button" class="mini" data-act="toggleToken">Afficher</button></div>' +
+    '<small id="jeton-etat">' + tokenHint(dr.token) + '</small></div>' +
     '<div class="actions" style="display:flex;flex-wrap:wrap;gap:10px"><button class="btn" type="submit">' + (shared() ? 'Enregistrer et relier' : 'Relier le journal') + '</button>' +
     (shared() ? '<button class="btn btn-sec" type="button" data-act="disconnect">Délier cet appareil</button>' : '') + '</div></form>';
   if (shared() && c.token){
@@ -1196,7 +1229,7 @@ var A = {
   },
   editTemplate:function(el){ var t = S.doc.templates[el.dataset.id]; if (t) sheetTemplate(t); },
   disconnect:function(){
-    S.cfg = null; store.del(K.cfg); S.cnxMsg = null; S.etag = null; setSync('local');
+    S.cfg = null; store.del(K.cfg); S.cnxMsg = null; S.cnxDraft = {}; S.etag = null; setSync('local');
     toast('Appareil délié : les notes déjà présentes restent ici.'); render();
   },
   shareInvite:function(){
@@ -1204,6 +1237,22 @@ var A = {
     navigator.share({ title:'Journal des pauses', text:'Rejoins le journal des pauses :', url:url }).catch(function(e){ if (e && e.name !== 'AbortError') copyText(url, 'Lien d’invitation copié.'); });
   },
   copyInvite:function(){ copyText(inviteUrl(), 'Lien d’invitation copié.'); },
+  pasteToken:function(){
+    var inp = $('#jeton');
+    function manuel(){ inp.focus(); toast('Appuie longuement dans le champ du jeton, puis choisis « Coller ».'); }
+    if (!navigator.clipboard || !navigator.clipboard.readText) return manuel();
+    navigator.clipboard.readText().then(function(txt){
+      var t = cleanToken(txt);
+      inp.value = t; S.cnxDraft.token = t;
+      showTokenState(t);
+      if (!t) toast('Le presse-papiers est vide : recopie le jeton depuis GitHub.');
+      else if (!tokenOk(t)) toast('Le presse-papiers ne contient pas de jeton GitHub.');
+    }).catch(manuel);
+  },
+  toggleToken:function(el){
+    var inp = $('#jeton'), voir = inp.classList.toggle('masque') === false;
+    el.textContent = voir ? 'Masquer' : 'Afficher';
+  },
   exportCsv:function(){ exportCsv(); },
   exportJson:function(){ download('journal-des-pauses-sauvegarde-' + todayStr() + '.json', serialize(S.doc), 'application/json'); }
 };
@@ -1225,7 +1274,9 @@ var FORMS = {
   cnx:function(fd){
     var owner = (fd.owner || '').trim(), repo = (fd.repo || '').trim();
     if (!owner || !repo){ S.cnxMsg = 'Indique le compte GitHub et le nom du dépôt des données.'; render(); return; }
-    var token = (fd.token || '').trim() || (S.cfg && S.cfg.token) || '';
+    var typed = cleanToken(fd.token);
+    if (typed && !tokenOk(typed)){ S.cnxMsg = 'Le jeton collé est incomplet ou contient autre chose : il doit commencer par github_pat_. Recopie-le depuis GitHub, puis touche « Coller ».'; render(); return; }
+    var token = typed || (S.cfg && S.cfg.token) || '';
     askConnect({ owner:owner, repo:repo, branch:(fd.branch || '').trim() || 'main', path:(fd.path || '').trim().replace(/^\/+/, '') || 'journal.json', token:token });
   },
   addPerson:function(fd){
@@ -1256,7 +1307,19 @@ document.addEventListener('change', function(e){
   if (!el || el.closest('#feuille-root')) return;
   var f = C[el.dataset.change]; if (f){ flushNotes(); f(el); }
 });
-document.addEventListener('input', function(e){ if (e.target.matches && e.target.matches('textarea[data-input=note]')) onNoteInput(e.target); });
+document.addEventListener('input', function(e){
+  var el = e.target;
+  if (!el.matches) return;
+  if (el.matches('textarea[data-input=note]')) return onNoteInput(el);
+  if (el.matches('form[data-form=cnx] input')){
+    if (el.name === 'token'){
+      var t = cleanToken(el.value);
+      if (t !== el.value && tokenOk(t)) el.value = t;
+      showTokenState(el.value);
+    }
+    S.cnxDraft[el.name] = el.value;
+  }
+});
 document.addEventListener('focusout', function(e){
   if (e.target.matches && e.target.matches('textarea[data-input=note]')) flushNotes();
   if (renderPending) setTimeout(function(){ if (renderPending && !isEditing()) render(); }, 80);
